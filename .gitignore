@@ -1,0 +1,18 @@
+# data and model outputs — never in git
+data/
+artifacts/
+*.npy
+*.faiss
+*.onnx
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# local
+.env
+.DS_Store
