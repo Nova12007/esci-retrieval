@@ -1,0 +1,69 @@
+======================================================================
+shopping_queries_dataset_examples.parquet
+======================================================================
+columns (10):
+    example_id                   Int64
+    query                        String
+    query_id                     Int64
+    product_id                   String
+    product_locale               String
+    esci_label                   String
+    small_version                Int64
+    large_version                Int64
+    split                        String
+    __index_level_0__            Int64
+
+rows: 2,621,288
+
+first 3 rows:
+shape: (3, 10)
+┌────────────┬────────────┬──────────┬────────────┬───┬────────────┬───────────┬───────┬───────────┐
+│ example_id ┆ query      ┆ query_id ┆ product_id ┆ … ┆ small_vers ┆ large_ver ┆ split ┆ __index_l │
+│ ---        ┆ ---        ┆ ---      ┆ ---        ┆   ┆ ion        ┆ sion      ┆ ---   ┆ evel_0__  │
+│ i64        ┆ str        ┆ i64      ┆ str        ┆   ┆ ---        ┆ ---       ┆ str   ┆ ---       │
+│            ┆            ┆          ┆            ┆   ┆ i64        ┆ i64       ┆       ┆ i64       │
+╞════════════╪════════════╪══════════╪════════════╪═══╪════════════╪═══════════╪═══════╪═══════════╡
+│ 0          ┆ revent 80  ┆ 0        ┆ B000MOO21W ┆ … ┆ 0          ┆ 1         ┆ train ┆ 0         │
+│            ┆ cfm        ┆          ┆            ┆   ┆            ┆           ┆       ┆           │
+│ 1          ┆ revent 80  ┆ 0        ┆ B07X3Y6B1V ┆ … ┆ 0          ┆ 1         ┆ train ┆ 1         │
+│            ┆ cfm        ┆          ┆            ┆   ┆            ┆           ┆       ┆           │
+│ 2          ┆ revent 80  ┆ 0        ┆ B07WDM7MQQ ┆ … ┆ 0          ┆ 1         ┆ train ┆ 2         │
+│            ┆ cfm        ┆          ┆            ┆   ┆            ┆           ┆       ┆           │
+└────────────┴────────────┴──────────┴────────────┴───┴────────────┴───────────┴───────┴───────────┘
+
+======================================================================
+shopping_queries_dataset_products.parquet
+======================================================================
+columns (7):
+    product_id                   String
+    product_title                String
+    product_description          String
+    product_bullet_point         String
+    product_brand                String
+    product_color                String
+    product_locale               String
+
+rows: 1,814,924
+
+first 3 rows:
+shape: (3, 7)
+┌────────────┬──────────────┬──────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
+│ product_id ┆ product_titl ┆ product_desc ┆ product_bul ┆ product_bra ┆ product_col ┆ product_loc │
+│ ---        ┆ e            ┆ ription      ┆ let_point   ┆ nd          ┆ or          ┆ ale         │
+│ str        ┆ ---          ┆ ---          ┆ ---         ┆ ---         ┆ ---         ┆ ---         │
+│            ┆ str          ┆ str          ┆ str         ┆ str         ┆ str         ┆ str         │
+╞════════════╪══════════════╪══════════════╪═════════════╪═════════════╪═════════════╪═════════════╡
+│ B079VKKJN7 ┆ 11 Degrees   ┆ Esta playera ┆ 11 Degrees  ┆ 11 Degrees  ┆ Negro       ┆ es          │
+│            ┆ de los       ┆ con el logo  ┆ Negro       ┆             ┆             ┆             │
+│            ┆ Hombres      ┆ de la…       ┆ Playera con ┆             ┆             ┆             │
+│            ┆ Play…        ┆              ┆ l…          ┆             ┆             ┆             │
+│ B079Y9VRKS ┆ Camiseta     ┆ null         ┆ null        ┆ 11 Degrees  ┆ Blanco      ┆ es          │
+│            ┆ Eleven       ┆              ┆             ┆             ┆             ┆             │
+│            ┆ Degrees Core ┆              ┆             ┆             ┆             ┆             │
+│            ┆ T…           ┆              ┆             ┆             ┆             ┆             │
+│ B07DP4LM9H ┆ 11 Degrees   ┆ La sudadera  ┆ 11 Degrees  ┆ 11 Degrees  ┆ Azul        ┆ es          │
+│            ┆ de los       ┆ con capucha  ┆ Azul Core   ┆             ┆             ┆             │
+│            ┆ Hombres      ┆ Core P…      ┆ Pull Over…  ┆             ┆             ┆             │
+│            ┆ Core…        ┆              ┆             ┆             ┆             ┆             │
+└────────────┴──────────────┴──────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
+
