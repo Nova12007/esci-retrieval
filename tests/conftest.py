@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+
 from esci.serving.app import app
+
 
 @pytest.fixture(scope="session")
 def client() -> TestClient:
