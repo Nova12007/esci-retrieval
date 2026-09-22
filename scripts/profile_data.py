@@ -22,9 +22,7 @@ def main() -> None:
     print(ex["product_locale"].value_counts(sort=True))
 
     # ADR-001: US locale, large_version.
-    us = ex.filter(
-        (pl.col("product_locale") == "us") & (pl.col("large_version") == 1)
-    )
+    us = ex.filter((pl.col("product_locale") == "us") & (pl.col("large_version") == 1))
     print(f"\nUS + large_version rows: {us.height:,}")
     print(f"unique queries:  {us['query_id'].n_unique():,}")
     print(f"unique products: {us['product_id'].n_unique():,}")
@@ -34,9 +32,7 @@ def main() -> None:
 
     print("\n--- ESCI label distribution ---")
     labels = us["esci_label"].value_counts(sort=True)
-    print(labels.with_columns(
-        (pl.col("count") / us.height * 100).round(2).alias("pct")
-    ))
+    print(labels.with_columns((pl.col("count") / us.height * 100).round(2).alias("pct")))
 
     print("\n--- judged products per query ---")
     per_query = us.group_by("query_id").len().rename({"len": "n_judged"})
@@ -49,17 +45,12 @@ def main() -> None:
     # Exact-labelled positives per query
     print("\n--- EXACT products per query ---")
     exact = (
-        us.filter(pl.col("esci_label") == "E")
-        .group_by("query_id")
-        .len()
-        .rename({"len": "n_exact"})
+        us.filter(pl.col("esci_label") == "E").group_by("query_id").len().rename({"len": "n_exact"})
     )
     print(exact["n_exact"].describe())
 
     print("\n--- query length in whitespace tokens ---")
-    qlen = us.select(
-        pl.col("query").str.split(" ").list.len().alias("tokens")
-    )
+    qlen = us.select(pl.col("query").str.split(" ").list.len().alias("tokens"))
     print(qlen["tokens"].describe())
 
     # Query frequency
@@ -71,12 +62,9 @@ def main() -> None:
     print("\n--- product text coverage (US products) ---")
     us_pr = pr.filter(pl.col("product_locale") == "us")
     print(f"US products: {us_pr.height:,}")
-    for col in ("product_title", "product_description",
-                "product_bullet_point", "product_brand"):
+    for col in ("product_title", "product_description", "product_bullet_point", "product_brand"):
         missing = us_pr.select(
-            (pl.col(col).is_null() | (pl.col(col).str.strip_chars() == ""))
-            .mean()
-            .alias("frac")
+            (pl.col(col).is_null() | (pl.col(col).str.strip_chars() == "")).mean().alias("frac")
         ).item()
         print(f"    {col:<24} missing: {missing * 100:.1f}%")
 
