@@ -1,0 +1,115 @@
+all examples: 2,621,288
+all products: 1,814,924
+
+--- locale distribution ---
+shape: (3, 2)
+┌────────────────┬─────────┐
+│ product_locale ┆ count   │
+│ ---            ┆ ---     │
+│ str            ┆ u32     │
+╞════════════════╪═════════╡
+│ us             ┆ 1818825 │
+│ jp             ┆ 446053  │
+│ es             ┆ 356410  │
+└────────────────┴─────────┘
+
+US + large_version rows: 1,818,825
+unique queries:  97,345
+unique products: 1,215,851
+
+--- official train/test split ---
+shape: (2, 2)
+┌───────┬─────────┐
+│ split ┆ count   │
+│ ---   ┆ ---     │
+│ str   ┆ u32     │
+╞═══════╪═════════╡
+│ train ┆ 1393063 │
+│ test  ┆ 425762  │
+└───────┴─────────┘
+
+--- ESCI label distribution ---
+shape: (4, 3)
+┌────────────┬─────────┬───────┐
+│ esci_label ┆ count   ┆ pct   │
+│ ---        ┆ ---     ┆ ---   │
+│ str        ┆ u32     ┆ f64   │
+╞════════════╪═════════╪═══════╡
+│ E          ┆ 1247558 ┆ 68.59 │
+│ S          ┆ 369313  ┆ 20.31 │
+│ I          ┆ 161905  ┆ 8.9   │
+│ C          ┆ 40049   ┆ 2.2   │
+└────────────┴─────────┴───────┘
+
+--- judged products per query ---
+shape: (9, 2)
+┌────────────┬───────────┐
+│ statistic  ┆ value     │
+│ ---        ┆ ---       │
+│ str        ┆ f64       │
+╞════════════╪═══════════╡
+│ count      ┆ 97345.0   │
+│ null_count ┆ 0.0       │
+│ mean       ┆ 18.684319 │
+│ std        ┆ 7.984444  │
+│ min        ┆ 8.0       │
+│ 25%        ┆ 16.0      │
+│ 50%        ┆ 16.0      │
+│ 75%        ┆ 16.0      │
+│ max        ┆ 198.0     │
+└────────────┴───────────┘
+
+percentiles:
+    p1   11
+    p25  16
+    p50  16
+    p75  16
+    p95  40
+    p99  43
+
+--- EXACT products per query ---
+shape: (9, 2)
+┌────────────┬───────────┐
+│ statistic  ┆ value     │
+│ ---        ┆ ---       │
+│ str        ┆ f64       │
+╞════════════╪═══════════╡
+│ count      ┆ 97344.0   │
+│ null_count ┆ 0.0       │
+│ mean       ┆ 12.815972 │
+│ std        ┆ 7.888383  │
+│ min        ┆ 1.0       │
+│ 25%        ┆ 7.0       │
+│ 50%        ┆ 14.0      │
+│ 75%        ┆ 16.0      │
+│ max        ┆ 146.0     │
+└────────────┴───────────┘
+
+--- query length in whitespace tokens ---
+shape: (9, 2)
+┌────────────┬────────────┐
+│ statistic  ┆ value      │
+│ ---        ┆ ---        │
+│ str        ┆ f64        │
+╞════════════╪════════════╡
+│ count      ┆ 1.818825e6 │
+│ null_count ┆ 0.0        │
+│ mean       ┆ 3.593326   │
+│ std        ┆ 1.730986   │
+│ min        ┆ 1.0        │
+│ 25%        ┆ 2.0        │
+│ 50%        ┆ 3.0        │
+│ 75%        ┆ 4.0        │
+│ max        ┆ 30.0       │
+└────────────┴────────────┘
+
+--- query frequency (rows per query) ---
+    top 1%    of queries hold 51,755 rows
+    bottom 50% of queries hold 760,263 rows
+
+--- product text coverage (US products) ---
+US products: 1,215,854
+    product_title            missing: 0.0%
+    product_description      missing: 46.9%
+    product_bullet_point     missing: 14.7%
+    product_brand            missing: 5.9%
