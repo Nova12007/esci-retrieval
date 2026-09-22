@@ -1,5 +1,5 @@
 # data and model outputs — never in git
-data/
+/data/
 artifacts/
 *.npy
 *.faiss
