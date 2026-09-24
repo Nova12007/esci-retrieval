@@ -23,3 +23,14 @@ serve:
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
+
+.PHONY: data bm25 table
+
+data:
+	uv run python -m esci.data.loaders
+
+bm25:
+	uv run python scripts/run_bm25.py --fold test --corpus $(corpus)
+
+table:
+	uv run python -c "from esci.eval.runner import render_table; print(render_table())"

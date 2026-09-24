@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 import polars as pl
+from tqdm.auto import tqdm
 
 from esci.eval.aggregate import Summary, score_rerank, score_retrieval, summarise
 
@@ -51,7 +52,16 @@ def evaluate_rerank(
     for qid, pid in zip(judgements["query_id"], judgements["product_id"], strict=True):
         candidates.setdefault(qid, []).append(pid)
 
-    ranked = ranker.rank_candidates(queries, candidates)
+    # ranked = ranker.rank_candidates(queries, candidates)
+    ranked: dict[int, list[str]] = {}
+
+    for qid in tqdm(queries, desc="Mode A: Reranking", unit="query"):
+        ranked.update(
+            ranker.rank_candidates(
+                {qid: queries[qid]},
+                {qid: candidates[qid]},
+            )
+        )
     per_query = score_rerank(ranked, judgements, k=k)
 
     summary = summarise(per_query, ranker.name, "rerank")
@@ -67,7 +77,11 @@ def evaluate_retrieval(
 ) -> Summary:
     """Mode B -- full-corpus retrieval. Recall is a lower bound."""
     queries = dict(zip(judgements["query_id"], judgements["query"], strict=True))
-    retrieved = ranker.retrieve(queries, k=k)
+    # retrieved = ranker.retrieve(queries, k=k)
+    retrieved: dict[int, list[str]] = {}
+
+    for qid in tqdm(queries, desc="Mode B: Retrieval", unit="query"):
+        retrieved.update(ranker.retrieve({qid: queries[qid]}, k=k))
     per_query = score_retrieval(retrieved, judgements, k=k)
 
     summary = summarise(per_query, ranker.name, "retrieval")

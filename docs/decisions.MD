@@ -70,3 +70,39 @@ Report two modes side by side, never blended:
 - **Mode B alone.** Would overstate what the recall number means.
 - **Mode A alone.** Loses the scale, latency and memory story entirely,
   which is the engineering point of the project.
+
+---
+
+## ADR-003 -- Document text and BM25 configuration
+
+**Date:** 2026-09-27
+**Status:** accepted
+
+### Context
+
+BM25 is the baseline every later system is measured against, so its
+configuration has to be defensible rather than tuned to flatter us.
+
+Measured on the `test` fold, 22458 queries:
+
+| document text          | nDCG@10 (Mode A) | Recall@100 (Mode B) | index build |
+|------------------------|------------------|---------------------|-------------|
+| title + brand + bullets| 0.751299693255098| 0.560099101305388   | 95.1s       |
+| title only             | 0.751295405993130| 0.5513083481457026  | 22.9s       |
+
+### Decision
+
+Use tbb. BM25 parameters k1=1.2, b=0.75 -- standard defaults,
+deliberately untuned.
+
+### Alternatives rejected
+
+- **Including `product_description`.** Long, frequently HTML, and
+  46.9% missing. Inflates the index for unclear gain.
+- **Tuning k1 and b on the test fold.** Would overstate the baseline's
+  quality relative to a fair comparison, and tuning on test is tuning
+  on test.
+
+### Consequences
+
+Every later result in this project is a delta against this row.

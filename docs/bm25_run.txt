@@ -1,0 +1,9 @@
+corpus: 1,215,854 products
+eval fold 'test': 22,458 queries, 425,762 rows
+index built in 127.7s
+
+--- Mode A: rerank judged set ---
+Summary(system='bm25_title_brand_bullets', mode='rerank', n_scored=22458, n_skipped=0, metrics={'ndcg@10': 0.7512996932550986, 'mrr': 0.7744341629814327})
+
+--- Mode B: full-corpus retrieval ---
+Summary(system='bm25_title_brand_bullets', mode='retrieval', n_scored=22457, n_skipped=1, metrics={'recall@100': 0.560099101305388})

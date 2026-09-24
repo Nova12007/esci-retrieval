@@ -1,0 +1,9 @@
+{"system": "bm25_title_brand_bullets", "mode": "rerank", "n_scored": 200, "n_skipped": 0, "ndcg@10": 0.6503, "mrr": 0.701}
+{"system": "bm25_title_brand_bullets", "mode": "retrieval", "n_scored": 200, "n_skipped": 0, "recall@100": 0.4834}
+{"system": "bm25_title_brand_bullets", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.7513, "mrr": 0.7744}
+{"system": "bm25_title_brand_bullets", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5601}
+{"system": "bm25_title_brand_bullets", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.7513, "mrr": 0.7744}
+{"system": "bm25_t", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.7513, "mrr": 0.7744}
+{"system": "bm25_tbb", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.7513, "mrr": 0.7743}
+{"system": "bm25_t", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5513}
+{"system": "bm25_tbb", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5601}

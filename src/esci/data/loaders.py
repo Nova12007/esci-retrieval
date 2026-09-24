@@ -76,12 +76,25 @@ def build_corpus() -> pl.DataFrame:
     )
 
 
+def build_corpus_title_only() -> pl.DataFrame:
+    """One row per unique US product. Title-only corpus."""
+    return (
+        pl.scan_parquet(PRODUCTS)
+        .filter(pl.col("product_locale") == LOCALE)
+        .select("product_id", "product_title")
+        .with_columns(pl.col("product_title").fill_null("").str.strip_chars().alias("text"))
+        .select("product_id", "text")
+        .collect()
+    )
+
+
 def materialise() -> None:
     """Write the joined view to data/processed/"""
 
     PROCESSED.mkdir(parents=True, exist_ok=True)
     load_judgements().collect().write_parquet(PROCESSED / "judgements.parquet")
-    build_corpus().write_parquet(PROCESSED / "corpus.parquet")
+    build_corpus().write_parquet(PROCESSED / "corpus_tbb.parquet")
+    build_corpus_title_only().write_parquet(PROCESSED / "corpus_t.parquet")
 
 
 if __name__ == "__main__":
