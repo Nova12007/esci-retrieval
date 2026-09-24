@@ -55,8 +55,7 @@ def recall_at_k(
 
 
 def reciprocal_rank(ranked_gains: Sequence[float], threshold: float = 1.0) -> float:
-    """1 / rank of the first item at or above `threshold` gain, else 0.0.
-    """
+    """1 / rank of the first item at or above `threshold` gain, else 0.0."""
     for rank, gain in enumerate(ranked_gains, start=1):
         if gain >= threshold:
             return 1.0 / rank

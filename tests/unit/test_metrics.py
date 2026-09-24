@@ -1,5 +1,4 @@
-"""Metric tests against values computed by hand
-"""
+"""Metric tests against values computed by hand"""
 
 from __future__ import annotations
 
@@ -7,7 +6,7 @@ import pytest
 
 from esci.eval.metrics import dcg, ndcg_at_k, recall_at_k, reciprocal_rank
 
-E, S, C, I = 1.0, 0.1, 0.01, 0.0
+E, S, C, I = 1.0, 0.1, 0.01, 0.0  # noqa: E741
 
 
 def test_position_one_is_undiscounted() -> None:
@@ -31,9 +30,7 @@ def test_perfect_ranking_scores_one() -> None:
 
 def test_reversed_ranking() -> None:
     # DCG 0.9937695 / IDCG 1.6809298 = 0.5912023
-    assert ndcg_at_k([I, S, E, E], [E, E, S, I], k=4) == pytest.approx(
-        0.5912, abs=1e-4
-    )
+    assert ndcg_at_k([I, S, E, E], [E, E, S, I], k=4) == pytest.approx(0.5912, abs=1e-4)
 
 
 def test_single_hit_at_rank_three() -> None:
