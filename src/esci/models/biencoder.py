@@ -23,7 +23,7 @@ class EncoderConfig:
     doc_prefix: str = ""
     pooling: str = "cls"  # "cls" for bge, "mean" for e5
     max_len_query: int = 48
-    max_len_doc: int = 512
+    max_len_doc: int = 256  # 21.5% of docs truncated; 512 needs 9.4 GB to train at batch 16
     normalize: bool = True
 
     def save(self, path: Path) -> None:

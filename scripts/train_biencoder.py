@@ -59,6 +59,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-dev-eval", action="store_true")
     p.add_argument("--no-wandb", action="store_true")
     p.add_argument("--tag", default="", help="run name suffix for W&B")
+    p.add_argument("--max-len-doc", type=int, default=256, help="document token cap")
+    p.add_argument("--grad-checkpoint", action="store_true", help="trade compute for memory")
+    p.add_argument("--log-every", type=int, default=50, help="optimiser steps between logs")
     return p.parse_args()
 
 
@@ -125,7 +128,7 @@ def main() -> None:
         seed=args.seed,
     )
 
-    enc_cfg = EncoderConfig(model_name=args.model)
+    enc_cfg = EncoderConfig(model_name=args.model, max_len_doc=args.max_len_doc)
     encoder = BiEncoder(enc_cfg, device="cuda")
 
     eval_fn = None
@@ -148,6 +151,8 @@ def main() -> None:
         batch_size=args.batch_size,
         accum_steps=args.accum,
         temperature=args.temperature,
+        log_every=args.log_every,
+        grad_checkpoint=args.grad_checkpoint,
         out_dir=Path(args.out),
     )
 

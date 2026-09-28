@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -44,6 +45,7 @@ class TrainConfig:
     warmup_frac: float = 0.1
     temperature: float = 0.05
     max_grad_norm: float = 1.0
+    grad_checkpoint: bool = False  # recompute activations in backward: ~30% slower, far less memory
     log_every: int = 50
     ckpt_every: int = 2000
     out_dir: Path = Path("artifacts/biencoder_v2")
@@ -80,14 +82,33 @@ def train(
     cfg.out_dir.mkdir(parents=True, exist_ok=True)
     encoder.cfg.save(cfg.out_dir / "encoder_config.json")
 
+    log_path = cfg.out_dir / "log.jsonl"
+    log_path.unlink(missing_ok=True)
+
+    def emit(record: dict[str, Any]) -> None:
+        """Print above the progress bar and append to log.jsonl."""
+        pbar.write(json.dumps(record))
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
     step = 0
     started = time.perf_counter()
+    # One bar for the whole run, so the ETA is for the run, not the epoch.
+    pbar = tqdm(total=len(loader) * cfg.epochs, desc="train", unit="batch", dynamic_ncols=True)
+
+    if cfg.grad_checkpoint:
+        encoder.model.gradient_checkpointing_enable()
+    vram = torch.cuda.get_device_properties(0).total_memory
+
+    if eval_fn is not None:  # epoch -1 = zero-shot, same dev slice as every later epoch
+        dev = eval_fn(encoder, -1)
+        emit({"epoch": -1, "step": 0, **{f"dev/{k}": v for k, v in dev.items()}})
 
     for epoch in range(cfg.epochs):
         collator.set_epoch(epoch)  # different positive sampled each epoch
         encoder.train()
 
-        for i, batch in enumerate(tqdm(loader, desc=f"epoch {epoch}")):
+        for i, batch in enumerate(loader):
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 q = encoder(batch["queries"], is_query=True)  # (B, D)
                 p = encoder(batch["positive_texts"], is_query=False)  # (M, D)
@@ -119,6 +140,20 @@ def train(
 
             loss.backward()  # type: ignore[no-untyped-call]
 
+            # On Windows the driver silently spills past VRAM into system RAM
+            # instead of raising OOM, and training runs ~25x slower. Fail loudly.
+            if torch.cuda.max_memory_allocated() > 0.97 * vram:
+                raise RuntimeError(
+                    f"peak {torch.cuda.max_memory_allocated() / 1e9:.1f} GB exceeds "
+                    f"{vram / 1e9:.1f} GB VRAM: spilling to system RAM. Lower "
+                    "--max-len-doc or --batch-size, or pass --grad-checkpoint."
+                )
+            pbar.update(1)
+            pbar.set_postfix(
+                epoch=f"{epoch + 1}/{cfg.epochs}",
+                loss=f"{loss.item() * cfg.accum_steps:.3f}",
+            )
+
             if (i + 1) % cfg.accum_steps == 0:
                 torch.nn.utils.clip_grad_norm_(encoder.parameters(), cfg.max_grad_norm)
                 optimiser.step()
@@ -131,22 +166,26 @@ def train(
                         "loss": loss.item() * cfg.accum_steps,
                         "lr": scheduler.get_last_lr()[0],
                         "step": step,
+                        "epoch": epoch,
                         "gpu_gb": torch.cuda.max_memory_allocated() / 1e9,
                         # if this is always 0, the mask is broken -- see The Diagonal, s7
                         "mask_rate": mask.float().mean().item(),
                         "neg_valid_rate": batch["negative_valid"].float().mean().item(),
                     }
-                    wandb_run.log(metrics) if wandb_run else print(metrics)
+                    emit(metrics)
+                    if wandb_run:
+                        wandb_run.log(metrics)
 
                 if step % cfg.ckpt_every == 0:
                     torch.save(encoder.model.state_dict(), cfg.out_dir / f"step_{step}.pt")
 
         if eval_fn is not None:
             dev = eval_fn(encoder, epoch)
-            print(f"[epoch {epoch}] {dev}")
+            emit({"epoch": epoch, "step": step, **{f"dev/{k}": v for k, v in dev.items()}})
             if wandb_run:
                 wandb_run.log({f"dev/{k}": v for k, v in dev.items()}, commit=False)
 
+    pbar.close()
     torch.save(encoder.model.state_dict(), cfg.out_dir / "final.pt")
     print(f"done in {(time.perf_counter() - started) / 60:.1f} min")
     return cfg.out_dir / "final.pt"
