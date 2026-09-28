@@ -12,7 +12,11 @@ dependencies = [
     "numpy>=1.26",
     "bm25s>=0.3.11",
     "pystemmer>=3.1.0",
-    "tqdm>=4.70.1",
+    "tqdm>=4.66",
+    "torch>=2.14,<2.15",   # same minor on laptop (CUDA) and Linux (CPU)
+    "transformers>=5.17.0",
+    "faiss-cpu>=1.15.1",
+    "wandb>=0.30.0",
 ]
 
 [dependency-groups]
@@ -31,6 +35,25 @@ target-version = "py312"
 # E/F = pycodestyle + pyflakes, I = import sorting, UP = modern syntax,
 # B = likely bugs, SIM = simplifications
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+# torch only, per platform: CUDA on the Windows training laptop, CPU on Linux
+# (CI, Docker, Cloud Run). `explicit` stops uv resolving every other package
+# from the PyTorch mirror, which carries stale numpy/tqdm/requests builds.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu126", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
 
 [tool.mypy]
 python_version = "3.12"
