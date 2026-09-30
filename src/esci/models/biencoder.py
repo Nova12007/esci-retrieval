@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 # bge: instruction prefix on the QUERY side only, CLS pooling.
@@ -69,19 +70,37 @@ class BiEncoder(torch.nn.Module):
         return F.normalize(emb, p=2, dim=-1) if self.cfg.normalize else emb
 
     @torch.no_grad()
+    def encode(self, texts: list[str], is_query: bool, batch_size: int = 256) -> np.ndarray:
+        """Batched inference to a float32 (N, D) array, for queries and small sets."""
+        self.model.eval()
+        out = []
+        for start in range(0, len(texts), batch_size):
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                emb = self.forward(texts[start : start + batch_size], is_query=is_query)
+            out.append(emb.float().cpu().numpy())
+        return np.concatenate(out) if out else np.zeros((0, self.dim), dtype=np.float32)
+
+    @torch.no_grad()
     def encode_to_memmap(
         self, texts: list[str], out_path: Path, is_query: bool, batch_size: int = 256
     ) -> np.ndarray:
-        """Encode a large collection straight into a memory-mapped array."""
+        """Encode a large collection straight into a memory-mapped array.
+
+        Row i of the output is always texts[i]. Batches are formed in length
+        order, longest first: each batch pads to its longest member, so mixing a
+        20-token title with a 256-token listing wastes most of the compute.
+        Longest first also means an OOM shows up in the first batch, not the last.
+        """
         self.model.eval()
         out_path.parent.mkdir(parents=True, exist_ok=True)
         arr = np.lib.format.open_memmap(
             out_path, mode="w+", dtype=np.float32, shape=(len(texts), self.dim)
         )
-        for start in range(0, len(texts), batch_size):
-            chunk = texts[start : start + batch_size]
+        order = np.argsort([-len(t) for t in texts], kind="stable")
+        for start in tqdm(range(0, len(texts), batch_size), desc="encode", unit="batch"):
+            rows = order[start : start + batch_size]
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                emb = self.forward(chunk, is_query=is_query)
-            arr[start : start + len(chunk)] = emb.float().cpu().numpy()
+                emb = self.forward([texts[i] for i in rows], is_query=is_query)
+            arr[rows] = emb.float().cpu().numpy()  # scatter back to original positions
         arr.flush()
         return arr

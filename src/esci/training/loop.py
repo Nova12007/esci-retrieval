@@ -92,6 +92,10 @@ def train(
             f.write(json.dumps(record) + "\n")
 
     step = 0
+    # Logged values are means over the window since the last log line; a single
+    # 16-query batch is too noisy to read a trend from.
+    win_loss, win_neg_valid, win_batches = 0.0, 0.0, 0
+    mask_cells = 0  # running total: the mask fires in ~0.4% of random batches of 16
     started = time.perf_counter()
     # One bar for the whole run, so the ETA is for the run, not the epoch.
     pbar = tqdm(total=len(loader) * cfg.epochs, desc="train", unit="batch", dynamic_ncols=True)
@@ -148,11 +152,14 @@ def train(
                     f"{vram / 1e9:.1f} GB VRAM: spilling to system RAM. Lower "
                     "--max-len-doc or --batch-size, or pass --grad-checkpoint."
                 )
+            batch_loss = loss.item() * cfg.accum_steps
+            win_loss += batch_loss
+            win_neg_valid += batch["negative_valid"].float().mean().item()
+            win_batches += 1
+            mask_cells += int(mask.sum().item())
+
             pbar.update(1)
-            pbar.set_postfix(
-                epoch=f"{epoch + 1}/{cfg.epochs}",
-                loss=f"{loss.item() * cfg.accum_steps:.3f}",
-            )
+            pbar.set_postfix(epoch=f"{epoch + 1}/{cfg.epochs}", loss=f"{batch_loss:.3f}")
 
             if (i + 1) % cfg.accum_steps == 0:
                 torch.nn.utils.clip_grad_norm_(encoder.parameters(), cfg.max_grad_norm)
@@ -163,16 +170,16 @@ def train(
 
                 if step % cfg.log_every == 0:
                     metrics = {
-                        "loss": loss.item() * cfg.accum_steps,
+                        "loss": win_loss / win_batches,
                         "lr": scheduler.get_last_lr()[0],
                         "step": step,
                         "epoch": epoch,
                         "gpu_gb": torch.cuda.max_memory_allocated() / 1e9,
-                        # if this is always 0, the mask is broken -- see The Diagonal, s7
-                        "mask_rate": mask.float().mean().item(),
-                        "neg_valid_rate": batch["negative_valid"].float().mean().item(),
+                        "mask_cells_total": mask_cells,
+                        "neg_valid_rate": win_neg_valid / win_batches,
                     }
                     emit(metrics)
+                    win_loss, win_neg_valid, win_batches = 0.0, 0.0, 0
                     if wandb_run:
                         wandb_run.log(metrics)
 

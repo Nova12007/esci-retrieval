@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from itertools import batched
 from pathlib import Path
 from typing import Protocol
 
@@ -13,6 +14,9 @@ from esci.eval.aggregate import Summary, score_rerank, score_retrieval, summaris
 
 PER_QUERY = Path("artifacts/per_query")
 RESULTS = Path("benchmarks/results.jsonl")
+# Rankers get queries in chunks: dense encodes and searches a chunk as one matrix
+# multiply; BM25 loops inside the chunk, so its results are unchanged.
+CHUNK = 256
 
 
 class Ranker(Protocol):
@@ -52,16 +56,15 @@ def evaluate_rerank(
     for qid, pid in zip(judgements["query_id"], judgements["product_id"], strict=True):
         candidates.setdefault(qid, []).append(pid)
 
-    # ranked = ranker.rank_candidates(queries, candidates)
     ranked: dict[int, list[str]] = {}
-
-    for qid in tqdm(queries, desc="Mode A: Reranking", unit="query"):
-        ranked.update(
-            ranker.rank_candidates(
-                {qid: queries[qid]},
-                {qid: candidates[qid]},
+    with tqdm(total=len(queries), desc="Mode A: Reranking", unit="query") as bar:
+        for chunk in batched(queries, CHUNK):
+            ranked.update(
+                ranker.rank_candidates(
+                    {q: queries[q] for q in chunk}, {q: candidates[q] for q in chunk}
+                )
             )
-        )
+            bar.update(len(chunk))
     per_query = score_rerank(ranked, judgements, k=k)
 
     summary = summarise(per_query, ranker.name, "rerank")
@@ -77,11 +80,11 @@ def evaluate_retrieval(
 ) -> Summary:
     """Mode B -- full-corpus retrieval. Recall is a lower bound."""
     queries = dict(zip(judgements["query_id"], judgements["query"], strict=True))
-    # retrieved = ranker.retrieve(queries, k=k)
     retrieved: dict[int, list[str]] = {}
-
-    for qid in tqdm(queries, desc="Mode B: Retrieval", unit="query"):
-        retrieved.update(ranker.retrieve({qid: queries[qid]}, k=k))
+    with tqdm(total=len(queries), desc="Mode B: Retrieval", unit="query") as bar:
+        for chunk in batched(queries, CHUNK):
+            retrieved.update(ranker.retrieve({q: queries[q] for q in chunk}, k=k))
+            bar.update(len(chunk))
     per_query = score_retrieval(retrieved, judgements, k=k)
 
     summary = summarise(per_query, ranker.name, "retrieval")
