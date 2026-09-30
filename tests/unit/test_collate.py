@@ -37,7 +37,7 @@ def test_masking_substitutes_removes_them_from_private_negatives() -> None:
     """
     drawn = _negatives_drawn({7: frozenset({"e1", "e2", "s1", "s2"})})
     assert drawn.isdisjoint({"s1", "s2"})
-    assert drawn <= {"c1", "i1"}
+    assert drawn == {"c1", "i1", "[pad]"}  # two real negatives, two masked slots
 
 
 def test_all_negatives_masked_falls_back_to_in_batch_only() -> None:
@@ -57,3 +57,15 @@ def test_relevance_mask_flags_other_rows_relevant_positives_only() -> None:
     )
     # row 1 must not treat row 0's x1 as a negative; own columns never flagged
     assert mask.tolist() == [[False, False], [True, False]]
+
+
+def test_short_rows_are_padded_and_masked_never_repeated() -> None:
+    """One S/C/I available, four slots: one real negative, three masked pads.
+
+    Repeating it instead would add the same term to the softmax denominator
+    four times, silently weighting that product 4x.
+    """
+    ex = QueryExample(query_id=9, query="hdmi cable", positive_ids=("e1",), negative_ids=("s1",))
+    batch = QueryCollator(TEXT, {9: frozenset({"e1"})}, n_negatives=4)([ex])
+    assert batch["negative_texts"][0] == ["text s1", "[pad]", "[pad]", "[pad]"]
+    assert batch["negative_valid"][0].tolist() == [True, False, False, False]

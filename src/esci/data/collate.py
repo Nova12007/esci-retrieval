@@ -74,17 +74,15 @@ class QueryCollator:
             relevant = self.relevant_by_query.get(ex.query_id, frozenset())
             candidates = [n for n in ex.negative_ids if n not in relevant]
 
-            # Negatives keep their hardest-first order; sample from the
-            # front so S dominates. Pad by repetition only if non-empty.
-            pool = candidates[: max(self.n_negatives * 3, self.n_negatives)]
-            if pool:
-                rng.shuffle(pool)
-                chosen_neg = (pool * self.n_negatives)[: self.n_negatives]
-                valid = [True] * self.n_negatives
-            else:
-                # finding 3: the query is KEPT and trains on in-batch negatives only
-                chosen_neg = []
-                valid = [False] * self.n_negatives
+            # Negatives keep their hardest-first order; sample from the front so
+            # S dominates. Never repeat one: a duplicate adds the same term to the
+            # softmax denominator again, weighting that product k-fold. The median
+            # query has only 3 S/C/I, so short rows are padded and masked instead;
+            # rows with none (28%) train on in-batch negatives only.
+            pool = candidates[: self.n_negatives * 3]
+            rng.shuffle(pool)
+            chosen_neg = pool[: self.n_negatives]
+            valid = [True] * len(chosen_neg) + [False] * (self.n_negatives - len(chosen_neg))
 
             texts = [self.text_by_id.get(n, "") for n in chosen_neg]
             texts += [PAD] * (self.n_negatives - len(texts))
