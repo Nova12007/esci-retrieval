@@ -247,3 +247,53 @@ resamples (`scripts/compare.py`). Differences are paired.
   at finding products in the full catalogue; fine-tuning is where Mode B moves.
 - Fine-tuning's +5.8 points is below the +8 to +20 usually seen; ADR-004 lists
   the likely causes (16-query batches, accumulation cutting update count).
+
+---
+
+## ADR-007 -- Batch 64 with gradient checkpointing becomes the training default
+
+**Date:** 2026-09-30
+**Status:** accepted
+
+### Context
+
+ADR-004 ablation 1: does the number of in-batch negatives matter? v2 used 16
+queries per micro-batch with 4-step accumulation. v3 uses 64 queries with no
+accumulation. Both average gradients over 64 queries per optimiser step and
+take 1,054 steps per epoch with the same schedule, so the only change is
+negatives per query: up to 63 in-batch instead of 15. Gradient checkpointing
+changes memory and speed, not the maths.
+
+Measured at 256-token documents, checkpointing on:
+
+| batch | peak VRAM | s/batch | min/epoch |
+|---|---|---|---|
+| 32 | 2.03 GB | 1.34 | ~47 |
+| 48 | 2.82 GB | 1.71 | ~40 |
+| 64 | 3.64 GB | 2.19 | ~38 |
+
+### Results
+
+Test fold, paired bootstrap, v3 minus v2:
+
+| metric | v2 | v3 | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6273 | 0.6343 | +0.0070 [+0.0059, +0.0080] |
+| Mode A nDCG@10 | 0.8928 | 0.8919 | -0.0009 [-0.0013, -0.0005] |
+
+Dev zero-shot (epoch -1) reproduced exactly at 0.8850. The relevance mask set
+99 cells over the run, where at batch 16 it almost never fired.
+
+### Decision
+
+Batch 64, `--accum 1`, `--grad-checkpoint` is the new default configuration.
+
+### Consequences
+
+- More negatives help full-corpus retrieval, but only by 0.7 points. The gap
+  between our +5.8 fine-tuning gain and the usual +8 to +20 is mostly not batch
+  size.
+- The Mode A drop clears significance with 22k queries but is a thousandth of
+  the scale on a saturated metric. Not a reason to prefer v2.
+- ADR-004's accumulation ablation is superseded: at batch 64 there is nothing
+  left to accumulate.

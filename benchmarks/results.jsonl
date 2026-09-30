@@ -11,3 +11,5 @@
 {"system": "bge_small_zeroshot", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5698}
 {"system": "biencoder_v2", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8928, "mrr": 0.9265}
 {"system": "biencoder_v2", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6273}
+{"system": "biencoder_v3", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8919, "mrr": 0.9257}
+{"system": "biencoder_v3", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6343}
