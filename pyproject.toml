@@ -25,6 +25,7 @@ dev = [
     "httpx>=0.27",      # required by fastapi's TestClient
     "ruff>=0.7",
     "mypy>=1.13",
+    "matplotlib>=3.11.2",
 ]
 
 [tool.ruff]
