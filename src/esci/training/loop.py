@@ -40,12 +40,12 @@ class ExampleDataset(Dataset[QueryExample]):
 class TrainConfig:
     lr: float = 2e-5
     epochs: int = 2
-    batch_size: int = 16  # 6 GB: 16 queries x (1 q + 1 pos + 4 neg) = 96 seqs
-    accum_steps: int = 4  # effective optimiser batch 64
+    batch_size: int = 64  # 64 x (1 q + 1 pos + 4 neg) = 384 seqs: 3.6 GB with checkpointing
+    accum_steps: int = 1  # accumulation adds no in-batch negatives; ADR-007
     warmup_frac: float = 0.1
     temperature: float = 0.05
     max_grad_norm: float = 1.0
-    grad_checkpoint: bool = False  # recompute activations in backward: ~30% slower, far less memory
+    grad_checkpoint: bool = True  # recompute activations in backward: ~30% slower, far less memory
     log_every: int = 50
     ckpt_every: int = 2000
     out_dir: Path = Path("artifacts/biencoder_v2")

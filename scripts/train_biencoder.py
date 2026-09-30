@@ -42,8 +42,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--limit", type=int, default=None, help="cap on TRAIN QUERIES")
     p.add_argument("--epochs", type=int, default=2)
     p.add_argument("--lr", type=float, default=2e-5)
-    p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--accum", type=int, default=4)
+    p.add_argument("--batch-size", type=int, default=64, help="queries per micro-batch (ADR-007)")
+    p.add_argument("--accum", type=int, default=1)
     p.add_argument("--n-positives", type=int, default=1)
     p.add_argument("--n-negatives", type=int, default=4)
     p.add_argument("--temperature", type=float, default=0.05)
@@ -60,7 +60,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-wandb", action="store_true")
     p.add_argument("--tag", default="", help="run name suffix for W&B")
     p.add_argument("--max-len-doc", type=int, default=256, help="document token cap")
-    p.add_argument("--grad-checkpoint", action="store_true", help="trade compute for memory")
+    p.add_argument(
+        "--grad-checkpoint",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="recompute activations in backward; batch 64 needs it on 6 GB",
+    )
     p.add_argument("--log-every", type=int, default=50, help="optimiser steps between logs")
     return p.parse_args()
 
