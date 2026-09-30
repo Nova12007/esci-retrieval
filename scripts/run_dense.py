@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--limit", type=int, default=None, help="evaluate on N queries only")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--reencode", action="store_true", help="ignore cached embeddings")
+    p.add_argument(
+        "--backend",
+        choices=["torch", "faiss"],
+        default="torch",
+        help="exact search either way; torch runs on the GPU, ~30x faster here (ADR-006)",
+    )
     return p.parse_args()
 
 
@@ -103,8 +109,13 @@ def main() -> None:
         embeddings=emb,
         encode_queries=lambda qs: encoder.encode(qs, is_query=True),
         name=args.name,
+        backend=args.backend,
+        device="cuda",
     )
-    print(f"flat index: {emb.nbytes / 1e9:.2f} GB, built in {time.perf_counter() - t0:.1f}s")
+    print(
+        f"exact index ({args.backend}): {emb.nbytes / 1e9:.2f} GB, "
+        f"built in {time.perf_counter() - t0:.1f}s"
+    )
 
     print("\n--- Mode A: rerank judged set ---")
     print(evaluate_rerank(ranker, evalset, k=10))

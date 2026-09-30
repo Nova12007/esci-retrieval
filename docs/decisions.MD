@@ -184,3 +184,66 @@ products; 128 would truncate 50.6%.
 3. 512-token documents
 4. Substitutes: leave / mask (`--mask-threshold 0.1`) / weight by `1 - gain`
 5. lr 1e-5, only if fine-tuned lands below zero-shot
+
+---
+
+## ADR-006 -- Exact search for evaluation runs on the GPU
+
+**Date:** 2026-09-30
+**Status:** accepted
+
+### Context
+
+The first dense evaluations took ~30 minutes per system for Mode B. Profiled
+on 2,048 test queries against 1,215,854 products (384-d, fp32):
+
+| exact search | time | queries/s |
+|---|---|---|
+| FAISS `IndexFlatIP`, CPU, 20 threads | 22.8 s | ~90 |
+| FAISS, CPU, 1 thread | 29.1 s | ~70 |
+| torch matmul + topk, CPU | 22.9 s | ~90 |
+| torch matmul + topk, RTX 4050 | 0.7 s | ~2,900 |
+
+Thread count barely matters and torch on the CPU is no faster, so FAISS is
+not misconfigured: scoring 1.2M products and selecting the top 100 per query
+is simply slow on this laptop's CPU. Chunking queries 256 at a time made it
+worse (5-25 s per chunk, erratic).
+
+### Decision
+
+`DenseRanker` takes a backend. Evaluation uses `torch` on the GPU; `faiss`
+stays the default and is what serving and the week 4 ANN indexes use.
+
+Both are exact search. Measured agreement on the 2,048 queries: 99.97% top-100
+overlap, maximum score difference 1.07e-6; the disagreements are ties at the
+100th place. A unit test asserts identical rankings on a synthetic corpus.
+
+### Consequences
+
+- A full test-fold evaluation takes seconds after encoding, which makes the
+  ADR-004 ablations affordable.
+- Needs 1.9 GB of VRAM for the matrix plus 1.2 GB of scores per 256-query
+  chunk: cannot run while training occupies the GPU.
+- Serving latency must be measured on the FAISS path, not inferred from these
+  numbers.
+
+---
+
+## Results -- week 3 gate, 2026-09-30
+
+Test fold, 22,458 queries. 95% percentile bootstrap over queries, 1,000
+resamples (`scripts/compare.py`). Differences are paired.
+
+| system | Mode A nDCG@10 | Mode B Recall@100 |
+|---|---|---|
+| `bm25_tbb` | 0.7513 [0.7481, 0.7546] | 0.5601 [0.5554, 0.5648] |
+| `bge_small_zeroshot` | 0.8694 [0.8671, 0.8719] | 0.5698 [0.5655, 0.5749] |
+| `biencoder_v2` (ADR-004) | 0.8928 [0.8907, 0.8951] | 0.6273 [0.6229, 0.6319] |
+
+- v2 vs BM25, Recall@100: **+0.0672 [+0.0637, +0.0704]**. Gate passed.
+- v2 vs zero-shot, Recall@100: +0.0575 [+0.0553, +0.0598].
+- Zero-shot vs BM25, Recall@100: +0.0097 [+0.0061, +0.0128]. Off-the-shelf bge
+  reranks a judged set far better than BM25 (Mode A +0.118) but barely beats it
+  at finding products in the full catalogue; fine-tuning is where Mode B moves.
+- Fine-tuning's +5.8 points is below the +8 to +20 usually seen; ADR-004 lists
+  the likely causes (16-query batches, accumulation cutting update count).
