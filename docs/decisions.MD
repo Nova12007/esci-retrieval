@@ -46,7 +46,7 @@ train/test. A dev set is carved from train by hashing `query_id`.
 ## ADR-002 — Two evaluation modes, always reported together
 
 **Date:** 2026-09-22
-**Status:** accepted
+**Status:** accepted; amended 2026-10-01 (Mode A comparability, see below)
 
 ### Context
 
@@ -61,7 +61,15 @@ Report two modes side by side, never blended:
 
 - **Mode A -- reranking.** Rank only each query's judged candidate set.
   nDCG@10 with the KDD Cup gain mapping (E=1.0, S=0.1, C=0.01, I=0.0).
-  Comparable to published Task 1 results.
+  ~~Comparable to published Task 1 results.~~
+
+  **Correction (2026-10-01):** not comparable. KDD Cup Task 1 is scored on
+  `small_version`, a controlled candidate set; this project uses
+  `large_version` (ADR-001), whose judged sets are mostly Exact. Mode A is
+  also saturated here: median 13 Exact in a judged set of 16, 64% of queries
+  have at least 10 Exact, and 30.6% of queries score 1.0 under BM25 already.
+  Mode A is reported overall and on the unsaturated slice (ADR-005), and
+  compared only within this project.
 - **Mode B -- full-corpus retrieval.** Retrieve top-k from all products.
   Recall@100 over judged-Exact items only, labelled a lower bound.
 
@@ -297,3 +305,59 @@ Batch 64, `--accum 1`, `--grad-checkpoint` is the new default configuration.
   the scale on a saturated metric. Not a reason to prefer v2.
 - ADR-004's accumulation ablation is superseded: at batch 64 there is nothing
   left to accumulate.
+
+---
+
+## ADR-005 -- Report Mode A on the unsaturated slice as well as overall
+
+**Date:** 2026-10-01
+**Status:** accepted
+
+### Context
+
+Mode A saturates on `large_version`. Test fold, 22,458 queries: median 16
+judged products of which 13 are Exact; 64.19% of queries have at least 10
+Exact; BM25 already scores exactly 1.0 on 30.63% of queries. When ten or more
+Exact products exist, any ranking that fills the top ten with them scores
+about 1.0, so those queries cannot separate a good ranker from a great one.
+`bm25_t` and `bm25_tbb` agree to the sixth decimal for this reason.
+
+### Decision
+
+Every Mode A result is reported twice: over all queries, and over the
+**unsaturated slice**, queries with fewer than 10 Exact judgements (8,043
+queries, 35.8%). Defined in `eval/slices.py`; `scripts/compare.py` prints both.
+
+### Evidence
+
+nDCG@10 with 95% bootstrap CIs; differences paired:
+
+| system | all queries | unsaturated slice |
+|---|---|---|
+| `bm25_tbb` | 0.7513 | 0.5384 [0.5338, 0.5432] |
+| `bge_small_zeroshot` | 0.8694 | 0.7637 [0.7587, 0.7686] |
+| `biencoder_v2` | 0.8928 | 0.8033 [0.7987, 0.8079] |
+| `biencoder_v3` | 0.8919 | 0.8014 [0.7968, 0.8062] |
+
+| comparison | all queries | unsaturated slice |
+|---|---|---|
+| v2 vs BM25 | +0.1416 | +0.2649 [+0.2589, +0.2707] |
+| v2 vs zero-shot | +0.0234 | +0.0396 |
+| v3 vs v2 | -0.0009 | -0.0019 [-0.0030, -0.0008] |
+
+Every gap roughly doubles on the slice, which is the point.
+
+### Alternatives rejected
+
+- **Slice only.** Hides that most queries are easy, which a reader needs to know.
+- **Switching Mode A to `small_version`.** A different dataset from Mode B
+  (ADR-001) would break the pairing between the two modes.
+- **A threshold other than 10.** Ten is where nDCG@10 can be maxed by Exacts
+  alone; any other cut would be tuned to the results.
+
+### Consequences
+
+- Mode B Recall@100 stays the headline metric; the slice makes Mode A useful
+  for reranking work in week 5, not a replacement.
+- v3's small Mode A drop is consistent across both views: more in-batch
+  negatives help retrieval and slightly hurt fine ranking within the judged set.

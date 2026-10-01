@@ -4,6 +4,8 @@
         --systems bge_small_zeroshot biencoder_v2
 
 Reads the per-query scores every evaluation writes to artifacts/per_query/.
+Mode A is also reported on the unsaturated slice (queries with fewer than 10
+Exact), where it can still discriminate (ADR-005).
 """
 
 from __future__ import annotations
@@ -12,10 +14,17 @@ import argparse
 
 import polars as pl
 
+from esci.data.splits import add_folds
 from esci.eval.runner import PER_QUERY
+from esci.eval.slices import unsaturated_queries
 from esci.eval.stats import bootstrap_ci, paired_bootstrap_diff
 
-METRICS = {"retrieval": "recall@100", "rerank": "ndcg@10"}
+# (label, mode, metric, restrict to unsaturated queries)
+REPORTS = [
+    ("Mode B retrieval", "retrieval", "recall@100", False),
+    ("Mode A rerank, all queries", "rerank", "ndcg@10", False),
+    ("Mode A rerank, unsaturated (<10 Exact)", "rerank", "ndcg@10", True),
+]
 
 
 def main() -> None:
@@ -23,13 +32,21 @@ def main() -> None:
     p.add_argument("--baseline", required=True)
     p.add_argument("--systems", nargs="+", required=True)
     p.add_argument("--resamples", type=int, default=1000)
+    p.add_argument("--fold", default="test", help="fold the per-query files were scored on")
     args = p.parse_args()
 
-    for mode, metric in METRICS.items():
-        print(f"\n{mode} -- {metric}, 95% CI over queries, {args.resamples} resamples")
-        base = pl.read_parquet(PER_QUERY / f"{args.baseline}__{mode}.parquet")
+    judgements = add_folds(pl.read_parquet("data/processed/judgements.parquet"))
+    unsaturated = unsaturated_queries(judgements.filter(pl.col("fold") == args.fold))
+
+    def load(system: str, mode: str, sliced: bool) -> pl.DataFrame:
+        df = pl.read_parquet(PER_QUERY / f"{system}__{mode}.parquet")
+        return df.filter(pl.col("query_id").is_in(unsaturated.implode())) if sliced else df
+
+    for label, mode, metric, sliced in REPORTS:
+        base = load(args.baseline, mode, sliced)
+        print(f"\n{label} -- {metric} over {base.height:,} queries, 95% CI")
         for system in [args.baseline, *args.systems]:
-            df = pl.read_parquet(PER_QUERY / f"{system}__{mode}.parquet")
+            df = load(system, mode, sliced)
             ci = bootstrap_ci(df[metric].drop_nulls().to_numpy(), args.resamples)
             line = f"  {system:<22} {ci}"
             if system != args.baseline:
