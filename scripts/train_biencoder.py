@@ -2,13 +2,14 @@
 
     # 1. overfit 100 queries -- loss MUST collapse to ~0
     uv run python scripts/train_biencoder.py --limit 100 --epochs 40 \
-        --lr 1e-4 --accum 1 --no-dev-eval --no-wandb
+        --lr 1e-4 --no-dev-eval --no-wandb --out artifacts/overfit100
 
-    # 2. smoke run
-    uv run python scripts/train_biencoder.py --limit 10000 --epochs 1
+    # 2. a real run; defaults are batch 64, no accumulation, checkpointing (ADR-007)
+    uv run python scripts/train_biencoder.py --epochs 2 --out artifacts/biencoder_vN
 
-    # 3. the real run
-    uv run python scripts/train_biencoder.py --epochs 2 | tee docs/train_v2.log
+    # 3. with mined negatives (scripts/mine_negatives.py)
+    uv run python scripts/train_biencoder.py --epochs 2 --out artifacts/biencoder_vN \
+        --negatives mined --mined artifacts/mined/biencoder_v3.parquet
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from esci.data.splits import add_folds
 from esci.eval.aggregate import score_rerank, summarise
 from esci.models.biencoder import BiEncoder, EncoderConfig
 from esci.training.loop import TrainConfig, train
+from esci.training.mining import apply_negatives
 
 JUDGEMENTS = Path("data/processed/judgements.parquet")
 
@@ -54,7 +56,14 @@ def parse_args() -> argparse.Namespace:
         help="1.0 masks Exact only; 0.1 also masks Substitutes",
     )
     p.add_argument("--seed", type=int, default=13)
-    p.add_argument("--out", default="artifacts/biencoder_v2")
+    p.add_argument("--out", required=True, help="run directory; never reuse one")
+    p.add_argument(
+        "--negatives",
+        choices=["esci", "mined", "mixed"],
+        default="esci",
+        help="esci: judged S/C/I; mined: the model's filtered mistakes; mixed: both",
+    )
+    p.add_argument("--mined", default=None, help="parquet from mine_negatives.py")
     p.add_argument("--dev-eval-queries", type=int, default=2000)
     p.add_argument("--no-dev-eval", action="store_true")
     p.add_argument("--no-wandb", action="store_true")
@@ -120,6 +129,16 @@ def main() -> None:
         kept = {e.query_id for e in examples}
         train_df = train_df.filter(pl.col("query_id").is_in(list(kept)))
         print(f"limited to {len(examples):,} queries")
+
+    if args.negatives != "esci":
+        assert args.mined, "--negatives mined|mixed needs --mined <parquet>"
+        mined_df = pl.read_parquet(args.mined).sort("query_id", "rank")
+        mined: dict[int, list[str]] = {}
+        for qid, pid in zip(mined_df["query_id"], mined_df["product_id"], strict=True):
+            mined.setdefault(int(qid), []).append(pid)
+        examples = apply_negatives(examples, mined, args.negatives)
+        with_neg = sum(1 for e in examples if e.negative_ids)
+        print(f"negatives: {args.negatives} from {args.mined}; {with_neg:,} queries have some")
 
     relevant = build_relevance_index(train_df, threshold=args.mask_threshold)
     corpus = pl.read_parquet(f"data/processed/corpus_{args.corpus}.parquet")
