@@ -361,3 +361,140 @@ Every gap roughly doubles on the slice, which is the point.
   for reranking work in week 5, not a replacement.
 - v3's small Mode A drop is consistent across both views: more in-batch
   negatives help retrieval and slightly hurt fine ranking within the judged set.
+
+---
+
+## ADR-008 -- Substitutes stay negatives in training
+
+**Date:** 2026-10-06
+**Status:** accepted
+
+### Context
+
+ESCI scores a Substitute 0.1 in nDCG but training pushed Substitutes away as
+negatives: the objective and the metric disagree. v4 = v3 with
+`--mask-threshold 0.1`, which removes Substitutes from both the in-batch block
+and each query's own negatives. One variable. Real negatives per query fell
+from about 0.60 to 0.28 of slots.
+
+Prediction recorded before the run: Mode B flat or slightly down, Mode A
+possibly up.
+
+### Results
+
+Test fold, paired bootstrap, v4 minus v3:
+
+| metric | v3 | v4 | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6100 | -0.0243 [-0.0259, -0.0228] |
+| Mode A nDCG@10, all | 0.8919 | 0.8844 | -0.0075 [-0.0083, -0.0068] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.7871 | -0.0144 [-0.0163, -0.0125] |
+
+The prediction was wrong on both counts: Mode B fell 2.4 points and Mode A
+fell too.
+
+### Decision
+
+Keep `--mask-threshold 1.0`: only Exact products are masked, Substitutes are
+negatives. The "weight negatives by 1 - gain" variant is dropped; it sits
+between two settings and the gap between them favours hard negatives.
+
+### Consequences
+
+Human-labelled Substitutes are the most valuable negatives in the data.
+Removing them cost about 3.5x what batch 64 gained (ADR-007). The metric's
+partial credit for Substitutes does not make them good training targets: the
+model has to learn what separates exact from nearly exact.
+
+---
+
+## ADR-009 -- Serving index: HNSW, M=16, efSearch=256
+
+**Date:** 2026-10-06
+**Status:** accepted
+
+### Context
+
+The served path needs single-query search over 1,215,854 products well
+inside a 100 ms p99 budget on CPU. Exact search takes 508 ms p99 on one
+thread. Swept on `biencoder_v3` embeddings, 2,000 seeded test queries
+(`scripts/sweep_index.py`; full table in `benchmarks/index_sweep.md`, chart
+in `benchmarks/figures/pareto.png`). Latency is one query per call on one
+thread, as a request handler searches.
+
+| index | recall vs exact | judged Recall@100 | size | p99 |
+|---|---|---|---|---|
+| Flat (exact) | 0.9998 | 0.6341 | 1,868 MB | 508 ms |
+| HNSW M=16, efSearch=128 | 0.9195 | 0.6038 | 2,043 MB | 0.63 ms |
+| **HNSW M=16, efSearch=256** | **0.9570** | **0.6133** | **2,043 MB** | **1.37 ms** |
+| HNSW M=64, efSearch=256 | 0.9677 | 0.6181 | 2,510 MB | 6.28 ms |
+| IVF-PQ nlist=1024, m=96, nprobe=64 | 0.8061 | 0.5845 | 128 MB | 27.4 ms |
+| IVF-PQ nlist=4096, m=48, nprobe=64 | 0.6363 | 0.5442 | 75 MB | 5.6 ms |
+
+### Decision
+
+HNSW, M=16, efConstruction=200, efSearch=256. It gives up 2.1 points of judged
+recall to exact search and answers in 1.4 ms p99.
+
+### Alternatives rejected
+
+- **IVF-PQ.** 16x smaller, but product quantisation at these code sizes loses
+  5 to 9 points of judged recall, more than fine-tuning gained over zero-shot.
+  The plan expected IVF-PQ to make deployment cheap; measured, the memory is
+  not worth the recall.
+- **Larger HNSW graphs.** M=64 buys 0.5 points for 4.6x the latency and 470 MB.
+- **efSearch=128.** Halves latency that is already negligible, for 1 point.
+
+### Consequences
+
+- Needs ~2 GB resident for the index: the Cloud Run instance gets 4 GiB.
+- If memory becomes the constraint, HNSW over 8-bit scalar-quantised vectors
+  is the next thing to measure, not IVF-PQ.
+- Recall at the served path is 0.6133 on this sample against 0.6341 exact;
+  reported results state which path they come from.
+
+---
+
+## ADR-010 -- Mined negatives replacing ESCI labels: rejected
+
+**Date:** 2026-10-06
+**Status:** accepted
+
+### Context
+
+ANCE-style mining with v3: retrieve top-100 for each of 67,494 training
+queries, drop judged-relevant products, skip the top 3 ranks, sample 12 of
+the rest per query (`scripts/mine_negatives.py`). v5 = v3's configuration
+with `--negatives mined`: the mined products replace the S/C/I negatives.
+
+Mining statistics: 809,928 negatives, 12 per query; **98.25% were never
+judged**, and 94.63% of the discarded top-3 products were unjudged too.
+
+### Results
+
+Test fold, paired bootstrap, v5 minus v3:
+
+| metric | v3 | v5 | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6248 | -0.0095 [-0.0117, -0.0075] |
+| Mode A nDCG@10, all | 0.8919 | 0.8724 | -0.0196 [-0.0207, -0.0184] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.7717 | -0.0297 [-0.0325, -0.0268] |
+
+Split by whether a test query has any S/C/I judgements: Mode B falls on both
+(-0.0072 with none, -0.0103 with some); Mode A falls only where S/C/I exist
+(-0.0256), since an all-Exact judged set scores the same in any order.
+
+### Decision
+
+Mined negatives do not replace human-labelled ones. ANCE rounds 2 and 3 are
+not run on top of a step that loses; v6 tests whether mined negatives *add*
+to the labels (`--negatives mixed`).
+
+### Interpretation
+
+Two causes overlap. Replacing the labels drops the Substitutes, which ADR-008
+measured at -2.4 points on their own. But Mode B also falls on queries with no
+S/C/I labels at all, where nothing was dropped, which points at false
+negatives: nearly every mined product is unjudged, so any relevant ones among
+them are trained as wrong answers. The three guards reduce this; they do not
+remove it.
