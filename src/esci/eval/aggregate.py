@@ -94,14 +94,22 @@ def score_retrieval(
 
     Recall is computed over judged-Exact products only and is a LOWER
     BOUND -- unjudged retrieved products are unknown, not wrong.
+
+    nDCG@10 over the retrieved list scores the ORDER of what came back,
+    which recall cannot see (a reranker leaves recall unchanged). Unjudged
+    products count as gain 0, so it is a lower bound for the same reason.
     """
     relevant_by_query: dict[int, set[str]] = {}
+    gain_by_pair: dict[tuple[int, str], float] = {}
+    pool_by_query: dict[int, list[float]] = {}
     for qid, pid, gain in zip(
         judgements["query_id"],
         judgements["product_id"],
         judgements["gain"],
         strict=True,
     ):
+        gain_by_pair[(qid, pid)] = gain
+        pool_by_query.setdefault(qid, []).append(gain)
         if gain >= gain_threshold:
             relevant_by_query.setdefault(qid, set()).add(pid)
 
@@ -112,6 +120,11 @@ def score_retrieval(
             {
                 "query_id": qid,
                 f"recall@{k}": recall_at_k(product_ids, relevant, k),
+                "ndcg@10": ndcg_at_k(
+                    [gain_by_pair.get((qid, p), 0.0) for p in product_ids],
+                    pool_by_query.get(qid, []),
+                    10,
+                ),
             }
         )
     return pl.DataFrame(rows)
