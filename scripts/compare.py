@@ -22,6 +22,7 @@ from esci.eval.stats import bootstrap_ci, paired_bootstrap_diff
 # (label, mode, metric, restrict to unsaturated queries)
 REPORTS = [
     ("Mode B retrieval", "retrieval", "recall@100", False),
+    ("Mode B order of the retrieved list", "retrieval", "ndcg@10", False),
     ("Mode A rerank, all queries", "rerank", "ndcg@10", False),
     ("Mode A rerank, unsaturated (<10 Exact)", "rerank", "ndcg@10", True),
 ]
@@ -44,6 +45,12 @@ def main() -> None:
 
     for label, mode, metric, sliced in REPORTS:
         base = load(args.baseline, mode, sliced)
+        missing = [
+            s for s in [args.baseline, *args.systems] if metric not in load(s, mode, False).columns
+        ]
+        if missing:  # Mode B nDCG@10 exists only for runs scored after it was added
+            print(f"\n{label} -- {metric}: not recorded for {', '.join(missing)}; re-run them")
+            continue
         print(f"\n{label} -- {metric} over {base.height:,} queries, 95% CI")
         for system in [args.baseline, *args.systems]:
             df = load(system, mode, sliced)
