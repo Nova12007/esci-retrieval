@@ -498,3 +498,22 @@ S/C/I labels at all, where nothing was dropped, which points at false
 negatives: nearly every mined product is unjudged, so any relevant ones among
 them are trained as wrong answers. The three guards reduce this; they do not
 remove it.
+
+### Update 2026-10-08 -- v6, labels plus mined
+
+v6 = v3's configuration with `--negatives mixed`: each query's S/C/I
+negatives interleaved with its mined ones. Paired bootstrap, v6 minus v3:
+
+| metric | v3 | v6 | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6378 | +0.0035 [+0.0016, +0.0053] |
+| Mode A nDCG@10, all | 0.8919 | 0.8794 | -0.0125 [-0.0135, -0.0114] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.7833 | -0.0182 [-0.0206, -0.0157] |
+
+On top of the labels, mined negatives buy a third of a point of retrieval and
+cost ranking quality about 3.5 times that: v5's false-negative pattern,
+diluted. **v3 remains the model.** ANCE rounds 2 and 3 are not run: re-mining
+with a stronger model surfaces harder negatives, which raises the unjudged
+share rather than lowering it, and none of the three guards can tell a wrong
+answer from an unjudged right one. Week 4's finding is that on ESCI the
+human-labelled near-misses beat mining.

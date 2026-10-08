@@ -17,3 +17,5 @@
 {"system": "biencoder_v4", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.61}
 {"system": "biencoder_v5", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8724, "mrr": 0.9048}
 {"system": "biencoder_v5", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6248}
+{"system": "biencoder_v6", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8794, "mrr": 0.9124}
+{"system": "biencoder_v6", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6378}
