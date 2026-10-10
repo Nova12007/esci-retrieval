@@ -696,3 +696,48 @@ scores higher on a small sample; a pinned value catches drift either way. The ze
 fp32 is deterministic, so any drift means the pipeline changed. The fixture
 is drawn from unsaturated queries because saturated ones score ~1.0 under
 almost any ranking and hide exactly these bugs.
+
+---
+
+## ADR-014 -- Interleaving, simulated: agrees with offline metrics in direction
+
+**Date:** 2026-10-10
+**Status:** accepted
+
+### Context
+
+Team-draft interleaving (Radlinski et al. 2008) over each pair's top 10, on
+2,000 seeded test queries x 5 sessions. Clicks come from a cascade model
+whose click and stop probabilities are assumptions keyed on ESCI labels
+(`eval/interleave.py`). It demonstrates the method; it is not evidence
+about users.
+
+### Results (`benchmarks/interleaving.md`)
+
+| A | B | preference for B [95% CI] | offline nDCG@10, B - A | agree |
+|---|---|---|---|---|
+| BM25 | v3 | +0.136 [+0.114, +0.159] | +0.0584 | yes |
+| v3 | RRF | +0.020 [-0.003, +0.043] | +0.0134 | yes, not significant |
+| v3 | RRF -> CE | +0.047 [+0.024, +0.070] | +0.0272 | yes |
+
+### Consequences
+
+- Interleaving orders the three comparisons as the offline metric does.
+- It does not resolve v3 vs RRF at this volume: a 1.3-point offline gain is
+  inside its noise. Small differences need more sessions.
+- The intervals treat sessions as independent; the 5 sessions on one query
+  are correlated, so they are somewhat too narrow. Resampling queries rather
+  than sessions is the fix. No conclusion above would change: the two
+  significant results are well clear of zero, and the third already is not
+  significant.
+
+---
+
+## Week 6 gate -- 2026-10-10
+
+Paired bootstrap CIs and permutation p-values on every comparison
+(`scripts/compare.py`); Mode A reported overall and on the unsaturated
+slice; query slices (ADR-013); failure analysis written by hand
+(`docs/failure_analysis.md`); a pinned-value regression test running in CI;
+interleaving demonstrated. `results.jsonl` rows are point estimates by
+design (append-only log); every reported comparison carries an interval.
