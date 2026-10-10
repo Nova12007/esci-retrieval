@@ -617,3 +617,18 @@ The plan's week 5 includes training nested 384/256/128-d embeddings to
 shrink the index. Skipped: ADR-009 found memory is not the binding
 constraint (the HNSW index fits a 4 GiB instance), so an 80-minute training
 run would answer a question the deployment does not ask.
+
+### Update 2026-10-10 -- RRF then cross-encoder (`ce_v1_on_rrf`)
+
+RRF(BM25, v3) supplies the top 100, the cross-encoder orders them. Paired
+bootstrap against v3 alone:
+
+| metric | v3 | RRF -> CE | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6497 | +0.0154 [+0.0137, +0.0174] |
+| Mode B nDCG@10 of the list | 0.3757 | 0.4043 | +0.0286 [+0.0261, +0.0311] |
+
+Recall equals RRF's exactly and Mode A equals `ce_v1`'s exactly, both as they
+must. The two stages compose: RRF's extra recall adds 0.56 points of nDCG@10
+on top of the cross-encoder over v3 alone (0.3987). This is the project's
+quality ceiling; week 7 distils it into something servable.
