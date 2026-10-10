@@ -24,8 +24,10 @@ import polars as pl
 import torch
 
 from esci.data.splits import add_folds
-from esci.eval.runner import evaluate_rerank, evaluate_retrieval
+from esci.eval.runner import Ranker, evaluate_rerank, evaluate_retrieval
 from esci.index.dense import DenseRanker
+from esci.index.fusion import FusionRanker
+from esci.index.lexical import BM25Ranker
 from esci.index.rerank import RerankRanker
 from esci.models.biencoder import BiEncoder, EncoderConfig
 from esci.models.crossencoder import CrossEncoder, CrossEncoderConfig
@@ -42,6 +44,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--fold", default="test")
     p.add_argument("--limit", type=int, default=None, help="evaluate on N queries only")
     p.add_argument("--latency-queries", type=int, default=50)
+    p.add_argument(
+        "--fusion",
+        action="store_true",
+        help="first stage = RRF of BM25 and the dense model, instead of dense alone",
+    )
     return p.parse_args()
 
 
@@ -97,11 +104,15 @@ def main() -> None:
         backend="torch",
         device="cuda",
     )
-    ranker = RerankRanker(ce.score, text, args.name, first_stage=first, depth=args.depth)
+    first_stage: Ranker = first
+    if args.fusion:
+        bm25 = BM25Ranker(corpus["product_id"].to_list(), corpus["text"].to_list(), "bm25")
+        first_stage = FusionRanker([bm25, first], name=f"rrf_bm25_{args.first_stage}")
+    ranker = RerankRanker(ce.score, text, args.name, first_stage=first_stage, depth=args.depth)
 
     print("\n--- Mode A: cross-encoder over the judged set ---")
     print(evaluate_rerank(ranker, evalset, k=10))
-    print(f"\n--- Mode B: {args.first_stage} top-{args.depth} -> cross-encoder ---")
+    print(f"\n--- Mode B: {first_stage.name} top-{args.depth} -> cross-encoder ---")
     print(evaluate_retrieval(ranker, evalset, k=args.depth))
 
     # Latency on one query's real candidate pool from the first stage.

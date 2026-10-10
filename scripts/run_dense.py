@@ -57,16 +57,36 @@ def load_encoder(checkpoint: str | None) -> BiEncoder:
     return encoder
 
 
+def encoder_source(checkpoint: str | None, cfg: EncoderConfig) -> str:
+    """What produced a set of vectors: a checkpoint path, or the base model."""
+    return Path(checkpoint).as_posix() if checkpoint else f"zero-shot:{cfg.model_name}"
+
+
 def corpus_embeddings(
-    encoder: BiEncoder, corpus: pl.DataFrame, path: Path, batch_size: int, reencode: bool
+    encoder: BiEncoder,
+    source: str,
+    corpus: pl.DataFrame,
+    path: Path,
+    batch_size: int,
+    reencode: bool,
 ) -> np.ndarray:
     ids_path = path.with_suffix(".ids.txt")
+    source_path = path.with_suffix(".source.txt")
     ids = corpus["product_id"].to_list()
 
     if path.exists() and ids_path.exists() and not reencode:
         cached = ids_path.read_text(encoding="utf-8").split("\n")
         assert cached == ids, f"{ids_path} does not match the corpus; pass --reencode"
-        print(f"cached embeddings: {path}")
+        # Queries and products must come from the same encoder. A cache built
+        # by one checkpoint searched with another's queries returns plausible,
+        # wrong numbers (it happened: v3 products with zero-shot queries).
+        built_by = source_path.read_text(encoding="utf-8").strip()
+        if built_by != source:
+            raise SystemExit(
+                f"{path} was encoded by {built_by!r} but queries would come from "
+                f"{source!r}. Pass the matching --checkpoint, or --reencode."
+            )
+        print(f"cached embeddings: {path} (from {built_by})")
         return np.load(path, mmap_mode="r")
 
     t0 = time.perf_counter()
@@ -74,6 +94,7 @@ def corpus_embeddings(
         corpus["text"].to_list(), path, is_query=False, batch_size=batch_size
     )
     ids_path.write_text("\n".join(ids), encoding="utf-8")
+    source_path.write_text(source, encoding="utf-8")
     print(f"encoded {len(ids):,} products in {(time.perf_counter() - t0) / 60:.1f} min")
     return emb
 
@@ -97,6 +118,7 @@ def main() -> None:
 
     emb = corpus_embeddings(
         encoder,
+        encoder_source(args.checkpoint, encoder.cfg),
         corpus,
         EMBEDDINGS / f"{args.name}_{args.corpus}.npy",
         args.batch_size,

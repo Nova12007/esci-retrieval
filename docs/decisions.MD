@@ -517,3 +517,103 @@ with a stronger model surfaces harder negatives, which raises the unjudged
 share rather than lowering it, and none of the three guards can tell a wrong
 answer from an unjudged right one. Week 4's finding is that on ESCI the
 human-labelled near-misses beat mining.
+
+---
+
+## ADR-011 -- Cross-encoder reranker: the quality ceiling, not the served ranker
+
+**Date:** 2026-10-10
+**Status:** accepted
+
+### Context
+
+`cross-encoder/ms-marco-MiniLM-L-6-v2` fine-tuned one epoch on 1,256,164
+(query, product, gain) pairs from the train fold: pointwise binary
+cross-entropy with the ESCI gain (E 1.0, S 0.1, C 0.01, I 0) as a soft target,
+lr 2e-5, batch 64, 256 tokens for query and product together. The plan said
+MSE; MSE through a sigmoid has vanishing gradients on confident mistakes,
+while BCE's gradient on the logit is (p - target).
+
+Dev nDCG@10 (2,000 queries): 0.9047 before ESCI training, 0.9148 at step
+5,000, 0.9153 at the end of the epoch (step 19,627). The gain came in the
+first quarter; a second epoch is not worth running.
+
+### Results
+
+Two-stage: `biencoder_v3` retrieves the top 100 by exact search, the
+cross-encoder reorders them. Test fold, paired bootstrap against v3 alone:
+
+| metric | v3 | v3 -> CE | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6343 | +0.0000 (same candidates, as required) |
+| Mode B nDCG@10 of the list | 0.3757 | 0.3987 | +0.0230 [+0.0205, +0.0252] |
+| Mode A nDCG@10, all | 0.8919 | 0.9016 | +0.0096 [+0.0082, +0.0110] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.8161 | +0.0147 [+0.0113, +0.0179] |
+
+Scoring one query's 100 candidates (256 tokens):
+
+| device | p50 | p99 |
+|---|---|---|
+| RTX 4050, bf16 | 155 ms | 169 ms |
+| CPU, 14 threads, fp32 | 7,371 ms | 7,859 ms |
+
+### Decision
+
+The cross-encoder is the reported quality ceiling and the teacher for
+distillation (week 7). It is not served.
+
+### Consequences
+
+- The plan estimated 200-400 ms on CPU for 100 pairs. Measured, it is 7.4 s:
+  100 candidates x ~256 tokens is ~25k tokens through the model per query.
+  No CPU tuning closes a 70x gap to a 100 ms budget, so the served ranker
+  must be distilled.
+- Mode B nDCG@10 was added to scoring for this: Recall@100 cannot see
+  reordering. It counts unjudged products as gain 0, so like recall it is a
+  lower bound.
+
+---
+
+## ADR-012 -- Reciprocal rank fusion: a better candidate set, a worse ranking
+
+**Date:** 2026-10-10
+**Status:** accepted
+
+### Context
+
+RRF over BM25 and `biencoder_v3`, k=60 untuned, each contributing its top
+100. Ranks rather than scores, because BM25 scores and cosine similarities
+are on unrelated scales.
+
+### Results
+
+Test fold, paired bootstrap against v3 alone:
+
+| metric | v3 | RRF | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6497 | +0.0154 [+0.0137, +0.0174] |
+| Mode B nDCG@10 of the list | 0.3757 | 0.3861 | +0.0104 [+0.0084, +0.0126] |
+| Mode A nDCG@10, all | 0.8919 | 0.8444 | -0.0476 [-0.0492, -0.0459] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.7078 | -0.0936 [-0.0971, -0.0900] |
+
+### Decision
+
+Use RRF as a candidate generator only, followed by the cross-encoder;
+evaluated as `ce_v1_on_rrf`. Never use it to order a judged set.
+
+### Consequences
+
+- +1.5 points of Recall@100 is the largest retrieval gain after fine-tuning:
+  BM25 still finds products the dense model misses.
+- In Mode A, fusing BM25's weak ordering (0.7513) drags down v3's: the
+  9.4-point loss on the unsaturated slice is the price of averaging in a
+  worse ranker.
+- Serving it means BM25 in the request path. Its latency and memory have to
+  be measured before it is adopted for serving, not assumed.
+
+### Not done: Matryoshka embeddings
+
+The plan's week 5 includes training nested 384/256/128-d embeddings to
+shrink the index. Skipped: ADR-009 found memory is not the binding
+constraint (the HNSW index fits a 4 GiB instance), so an 80-minute training
+run would answer a question the deployment does not ask.
