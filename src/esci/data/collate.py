@@ -18,6 +18,9 @@ class Batch(TypedDict):
     positive_owner: torch.Tensor  # (M,) long, row index of each positive
     negative_texts: list[list[str]]  # (B, n) padded with "[pad]"
     negative_valid: torch.Tensor  # (B, n) bool, False = padding
+    teacher_pos: torch.Tensor  # (M,) teacher logit per positive; 0 when unscored
+    teacher_neg: torch.Tensor  # (B, n) teacher logit per negative slot
+    teacher_valid: torch.Tensor  # (B, n) real negative AND both ends scored
 
 
 class QueryCollator:
@@ -28,12 +31,14 @@ class QueryCollator:
         n_positives: int = 1,
         n_negatives: int = 4,
         seed: int = 13,
+        teacher: dict[tuple[int, str], float] | None = None,
     ) -> None:
         self.text_by_id = text_by_id
         self.relevant_by_query = relevant_by_query
         self.n_positives = n_positives
         self.n_negatives = n_negatives
         self.seed = seed
+        self.teacher = teacher or {}  # (query_id, product_id) -> cross-encoder logit
         self.epoch = 0
 
     def set_epoch(self, epoch: int) -> None:
@@ -55,6 +60,9 @@ class QueryCollator:
         neg_texts: list[list[str]] = []
         pos_products: list[str] = []
         neg_valid: list[list[bool]] = []
+        t_pos: list[float] = []
+        t_neg: list[list[float]] = []
+        t_valid: list[list[bool]] = []
 
         for row, ex in enumerate(batch):
             rng = self._rng(ex.query_id)
@@ -67,6 +75,7 @@ class QueryCollator:
                 pos_texts.append(self.text_by_id.get(pid, ""))
                 pos_products.append(pid)
                 pos_owner.append(row)
+                t_pos.append(self.teacher.get((ex.query_id, pid), 0.0))
 
             # Anything at or above the mask threshold is not a negative. At the
             # default (1.0, Exact only) this is a no-op; at 0.1 it removes S, which
@@ -89,6 +98,14 @@ class QueryCollator:
             neg_texts.append(texts)
             neg_valid.append(valid)
 
+            pos_scored = (ex.query_id, chosen_pos[0]) in self.teacher if chosen_pos else False
+            scores = [self.teacher.get((ex.query_id, n)) for n in chosen_neg]
+            t_neg.append([s or 0.0 for s in scores] + [0.0] * (self.n_negatives - len(scores)))
+            t_valid.append(
+                [pos_scored and s is not None for s in scores]
+                + [False] * (self.n_negatives - len(scores))
+            )
+
         return {
             "query_ids": query_ids,
             "queries": queries,
@@ -97,6 +114,9 @@ class QueryCollator:
             "positive_owner": torch.tensor(pos_owner, dtype=torch.long),
             "negative_texts": neg_texts,
             "negative_valid": torch.tensor(neg_valid, dtype=torch.bool),
+            "teacher_pos": torch.tensor(t_pos, dtype=torch.float32),
+            "teacher_neg": torch.tensor(t_neg, dtype=torch.float32),
+            "teacher_valid": torch.tensor(t_valid, dtype=torch.bool),
         }
 
 

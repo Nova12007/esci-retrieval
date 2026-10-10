@@ -41,6 +41,30 @@ def info_nce(
     return per_query.mean()
 
 
+def margin_mse(
+    query: torch.Tensor,  # (B, D)    L2-normalised
+    positive: torch.Tensor,  # (B, D)    each row's positive
+    negatives: torch.Tensor,  # (B, n, D) each row's own negatives
+    teacher_pos: torch.Tensor,  # (B,)      teacher logit for the positive
+    teacher_neg: torch.Tensor,  # (B, n)    teacher logit for each negative
+    valid: torch.Tensor,  # (B, n)    True = real negative with a teacher score
+    temperature: float = 0.05,
+) -> torch.Tensor:
+    """Margin-MSE (Hofstätter et al., 2020): match the teacher's score gaps.
+
+    For each (query, positive, negative) the student margin s_pos - s_neg is
+    regressed onto the teacher margin t_pos - t_neg. Margins, not scores: the
+    cross-encoder's logits and the bi-encoder's cosines live on unrelated
+    scales, and only the ordering gap transfers. Student scores are cosine /
+    temperature, the same scale InfoNCE sees.
+    """
+    s_pos = (query * positive).sum(-1) / temperature  # (B,)
+    s_neg = torch.einsum("bd,bnd->bn", query, negatives) / temperature  # (B, n)
+    err = ((s_pos.unsqueeze(1) - s_neg) - (teacher_pos.unsqueeze(1) - teacher_neg)) ** 2
+    err = err.masked_fill(~valid, 0.0)
+    return err.sum() / valid.sum().clamp(min=1)
+
+
 def build_duplicate_mask(positive_ids: list[str], device: str) -> torch.Tensor:
     """True where two rows in the batch share the same positive product."""
     n = len(positive_ids)

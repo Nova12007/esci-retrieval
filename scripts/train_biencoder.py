@@ -64,6 +64,13 @@ def parse_args() -> argparse.Namespace:
         help="esci: judged S/C/I; mined: the model's filtered mistakes; mixed: both",
     )
     p.add_argument("--mined", default=None, help="parquet from mine_negatives.py")
+    p.add_argument("--teacher", default=None, help="parquet from score_teacher.py")
+    p.add_argument(
+        "--margin-weight",
+        type=float,
+        default=1.0,
+        help="weight of the margin-MSE term when --teacher is given",
+    )
     p.add_argument("--dev-eval-queries", type=int, default=2000)
     p.add_argument("--no-dev-eval", action="store_true")
     p.add_argument("--no-wandb", action="store_true")
@@ -144,12 +151,22 @@ def main() -> None:
     corpus = pl.read_parquet(f"data/processed/corpus_{args.corpus}.parquet")
     text_by_id = dict(zip(corpus["product_id"], corpus["text"], strict=True))
 
+    teacher = None
+    if args.teacher:
+        tdf = pl.read_parquet(args.teacher)
+        teacher = {
+            (int(q), pid): float(s)
+            for q, pid, s in zip(tdf["query_id"], tdf["product_id"], tdf["score"], strict=True)
+        }
+        print(f"teacher: {len(teacher):,} scored pairs from {args.teacher}")
+
     collator = QueryCollator(
         text_by_id=text_by_id,
         relevant_by_query=relevant,
         n_positives=args.n_positives,
         n_negatives=args.n_negatives,
         seed=args.seed,
+        teacher=teacher,
     )
 
     enc_cfg = EncoderConfig(model_name=args.model, max_len_doc=args.max_len_doc)
@@ -177,6 +194,7 @@ def main() -> None:
         temperature=args.temperature,
         log_every=args.log_every,
         grad_checkpoint=args.grad_checkpoint,
+        margin_weight=args.margin_weight if args.teacher else 0.0,
         out_dir=Path(args.out),
     )
 

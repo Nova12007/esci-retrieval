@@ -69,3 +69,25 @@ def test_short_rows_are_padded_and_masked_never_repeated() -> None:
     batch = QueryCollator(TEXT, {9: frozenset({"e1"})}, n_negatives=4)([ex])
     assert batch["negative_texts"][0] == ["text s1", "[pad]", "[pad]", "[pad]"]
     assert batch["negative_valid"][0].tolist() == [True, False, False, False]
+
+
+def test_teacher_scores_follow_the_sampled_products() -> None:
+    teacher = {(7, "e1"): 3.0, (7, "e2"): 3.0, (7, "s1"): 1.0, (7, "s2"): 0.5}
+    collator = QueryCollator(TEXT, {7: frozenset({"e1", "e2"})}, n_negatives=4, teacher=teacher)
+    batch = collator([_example()])
+    assert batch["teacher_pos"].tolist() == [3.0]
+    for text, t, ok in zip(
+        batch["negative_texts"][0],
+        batch["teacher_neg"][0].tolist(),
+        batch["teacher_valid"][0].tolist(),
+        strict=True,
+    ):
+        pid = text.removeprefix("text ")
+        assert ok == (pid in {"s1", "s2"})  # c1, i1 unscored, padding never valid
+        if ok:
+            assert t == teacher[(7, pid)]
+
+
+def test_without_a_teacher_nothing_is_valid() -> None:
+    batch = QueryCollator(TEXT, {7: frozenset({"e1"})})([_example()])
+    assert not batch["teacher_valid"].any()

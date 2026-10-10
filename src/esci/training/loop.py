@@ -16,7 +16,7 @@ from tqdm import tqdm
 from esci.data.collate import QueryCollator, build_relevance_mask
 from esci.data.pairs import QueryExample
 from esci.models.biencoder import BiEncoder
-from esci.training.losses import info_nce
+from esci.training.losses import info_nce, margin_mse
 
 
 class RunLogger(Protocol):
@@ -48,6 +48,7 @@ class TrainConfig:
     grad_checkpoint: bool = True  # recompute activations in backward: ~30% slower, far less memory
     log_every: int = 50
     ckpt_every: int = 2000
+    margin_weight: float = 0.0  # > 0 adds margin-MSE against teacher scores (distillation)
     out_dir: Path = Path("artifacts/biencoder_v2")
 
 
@@ -95,6 +96,7 @@ def train(
     # Logged values are means over the window since the last log line; a single
     # 16-query batch is too noisy to read a trend from.
     win_loss, win_neg_valid, win_batches = 0.0, 0.0, 0
+    win_margin, win_teacher_valid = 0.0, 0.0
     mask_cells = 0  # running total: the mask fires in ~0.4% of random batches of 16
     started = time.perf_counter()
     # One bar for the whole run, so the ETA is for the run, not the epoch.
@@ -129,18 +131,29 @@ def train(
                     device=str(q.device),
                 )
 
-                loss = (
-                    info_nce(
-                        query=q,
-                        positives=p,
-                        positive_owner=batch["positive_owner"].to(q.device),
-                        negatives=n_emb,
-                        relevance_mask=mask,
-                        negative_mask=batch["negative_valid"].to(q.device),
+                loss = info_nce(
+                    query=q,
+                    positives=p,
+                    positive_owner=batch["positive_owner"].to(q.device),
+                    negatives=n_emb,
+                    relevance_mask=mask,
+                    negative_mask=batch["negative_valid"].to(q.device),
+                    temperature=cfg.temperature,
+                )
+                margin = torch.zeros((), device=q.device)
+                if cfg.margin_weight > 0:
+                    # one positive per row, so p lines up with q row for row
+                    assert p.size(0) == q.size(0), "distillation needs --n-positives 1"
+                    margin = margin_mse(
+                        q.float(),
+                        p.float(),
+                        n_emb.float(),
+                        batch["teacher_pos"].to(q.device),
+                        batch["teacher_neg"].to(q.device),
+                        batch["teacher_valid"].to(q.device),
                         temperature=cfg.temperature,
                     )
-                    / cfg.accum_steps
-                )
+                loss = (loss + cfg.margin_weight * margin) / cfg.accum_steps
 
             loss.backward()  # type: ignore[no-untyped-call]
 
@@ -156,6 +169,8 @@ def train(
             win_loss += batch_loss
             win_neg_valid += batch["negative_valid"].float().mean().item()
             win_batches += 1
+            win_margin += margin.item()
+            win_teacher_valid += batch["teacher_valid"].float().mean().item()
             mask_cells += int(mask.sum().item())
 
             pbar.update(1)
@@ -178,8 +193,15 @@ def train(
                         "mask_cells_total": mask_cells,
                         "neg_valid_rate": win_neg_valid / win_batches,
                     }
+                    if cfg.margin_weight > 0:
+                        metrics["margin_mse"] = win_margin / win_batches
+                        # should track neg_valid_rate; far below it means the
+                        # teacher does not cover the training pairs and
+                        # distillation is silently off
+                        metrics["teacher_valid_rate"] = win_teacher_valid / win_batches
                     emit(metrics)
                     win_loss, win_neg_valid, win_batches = 0.0, 0.0, 0
+                    win_margin, win_teacher_valid = 0.0, 0.0
                     if wandb_run:
                         wandb_run.log(metrics)
 

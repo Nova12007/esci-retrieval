@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from esci.training.losses import (
     build_duplicate_mask,
     info_nce,
+    margin_mse,
 )
 
 
@@ -162,3 +163,35 @@ def test_gradients_flow() -> None:
 
     assert q.grad is not None
     assert torch.isfinite(q.grad).all()
+
+
+def _margin_case(teacher_gap: float) -> float:
+    q = _unit(torch.tensor([[1.0, 0.0]]))
+    pos = _unit(torch.tensor([[1.0, 0.0]]))  # cosine 1
+    neg = _unit(torch.tensor([[[0.0, 1.0]]]))  # cosine 0 -> student margin 1/0.05 = 20
+    return margin_mse(
+        q,
+        pos,
+        neg,
+        teacher_pos=torch.tensor([teacher_gap]),
+        teacher_neg=torch.tensor([[0.0]]),
+        valid=torch.tensor([[True]]),
+        temperature=0.05,
+    ).item()
+
+
+def test_margin_mse_is_zero_when_margins_match() -> None:
+    assert _margin_case(20.0) == pytest.approx(0.0, abs=1e-5)
+
+
+def test_margin_mse_is_squared_margin_error() -> None:
+    assert _margin_case(17.0) == pytest.approx(9.0, rel=1e-5)
+
+
+def test_margin_mse_ignores_masked_negatives_and_never_nans() -> None:
+    q = _unit(torch.randn(2, 8))
+    pos = _unit(torch.randn(2, 8))
+    neg = _unit(torch.randn(2, 3, 8))
+    t_pos, t_neg = torch.zeros(2), torch.full((2, 3), 1e6)  # huge error if counted
+    none = margin_mse(q, pos, neg, t_pos, t_neg, torch.zeros(2, 3, dtype=torch.bool))
+    assert none.item() == 0.0 and torch.isfinite(none)
