@@ -75,7 +75,7 @@ class BiEncoder(torch.nn.Module):
         self.model.eval()
         out = []
         for start in range(0, len(texts), batch_size):
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.device == "cuda"):
                 emb = self.forward(texts[start : start + batch_size], is_query=is_query)
             out.append(emb.float().cpu().numpy())
         return np.concatenate(out) if out else np.zeros((0, self.dim), dtype=np.float32)
@@ -99,7 +99,7 @@ class BiEncoder(torch.nn.Module):
         order = np.argsort([-len(t) for t in texts], kind="stable")
         for start in tqdm(range(0, len(texts), batch_size), desc="encode", unit="batch"):
             rows = order[start : start + batch_size]
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.device == "cuda"):
                 emb = self.forward([texts[i] for i in rows], is_query=is_query)
             arr[rows] = emb.float().cpu().numpy()  # scatter back to original positions
         arr.flush()

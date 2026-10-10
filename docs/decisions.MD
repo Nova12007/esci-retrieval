@@ -632,3 +632,67 @@ Recall equals RRF's exactly and Mode A equals `ce_v1`'s exactly, both as they
 must. The two stages compose: RRF's extra recall adds 0.56 points of nDCG@10
 on top of the cross-encoder over v3 alone (0.3987). This is the project's
 quality ceiling; week 7 distils it into something servable.
+
+---
+
+## ADR-013 -- Week 6: significance, slices and a regression test that can fail
+
+**Date:** 2026-10-10
+**Status:** accepted
+
+### Significance: paired permutation test beside the bootstrap
+
+Every paired comparison in `scripts/compare.py` now carries a two-sided
+paired permutation p-value (10,000 random sign flips of the per-query
+differences, (count+1)/(n+1), so it bottoms out at ~0.0001). The bootstrap CI
+answers "how uncertain is this difference"; the permutation test answers
+"could it be chance" without a normality assumption, which nDCG and recall
+violate: bounded, skewed, 30% of queries at exactly 1.0. A paired t-test was
+rejected for that reason.
+
+With 22,458 queries nearly every difference in this project is significant,
+including v2's +0.0009 Mode A edge over v3. Significance here mostly says the
+test fold is large; effect size decides. ADR-007 already acted on that.
+
+### Slices
+
+`eval/slices.py` defines query slices from the query text and judgements
+only, never from any system's output: length (1-2, 3-4, 5-7, 8+ words),
+contains a digit, names the brand of one of its Exact products (whole word,
+case-insensitive, generic brands excluded), and saturation (<10 Exact).
+`scripts/slice_report.py` writes `benchmarks/slices.md`. Mode B Recall@100,
+test fold:
+
+| slice | queries | BM25 | v3 | v3 - BM25 [95% CI] |
+|---|---|---|---|---|
+| has a number | 3,573 | 0.5739 | 0.6943 | +0.1205 [+0.1105, +0.1312] |
+| no number | 18,885 | 0.5575 | 0.6229 | +0.0654 [+0.0620, +0.0688] |
+| names a brand | 3,903 | 0.7840 | 0.8117 | +0.0277 [+0.0201, +0.0348] |
+| names no brand | 18,555 | 0.5130 | 0.5970 | +0.0840 [+0.0803, +0.0874] |
+| 1-2 words | 5,878 | 0.5090 | 0.5723 | +0.0634 [+0.0562, +0.0707] |
+
+- Against the usual expectation, v3's lead is largest on queries with
+  numbers (sizes, model numbers, counts). Zero-shot bge also beats BM25 there.
+- Brand queries are BM25's strength (0.784) and where v3's lead is smallest.
+  RRF's gain over v3 is largest on them: that is what BM25 contributes to
+  fusion (ADR-012).
+- v3 beats BM25 on average in every slice, so where dense fails has to be
+  found per query: `docs/failure_analysis.md`.
+
+### Regression test: pinned value, not a floor
+
+`tests/regression/test_floor.py` encodes a committed fixture (20 unsaturated
+test queries, 355 judged products, 0.09 MB, built by
+`scripts/make_regression_fixture.py`) with zero-shot bge on CPU and asserts
+Mode A nDCG@10 equals a pinned value (0.758770) within 0.003. A second test
+pins v3 (0.772805) and skips when the checkpoint is absent, as in CI.
+
+A floor was the plan and was rejected after measuring what it should catch.
+On a 50-query fixture, dropping the bge query prefix cost 0.008 and mean
+pooling 0.006, under any sensible floor margin. On the final 20-query fixture
+dropping the prefix *raised* the score, to 0.768216 (+0.0094), and mean
+pooling lowered it to 0.753921 (-0.0048). A floor cannot catch a bug that
+scores higher on a small sample; a pinned value catches drift either way. The zero-shot model never changes and CPU
+fp32 is deterministic, so any drift means the pipeline changed. The fixture
+is drawn from unsaturated queries because saturated ones score ~1.0 under
+almost any ranking and hide exactly these bugs.

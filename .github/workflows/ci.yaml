@@ -9,10 +9,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
@@ -31,5 +31,16 @@ jobs:
       - name: Type check
         run: uv run mypy src
 
-      - name: Test
-        run: uv run pytest --ignore=tests/data
+      - name: Unit tests
+        run: uv run pytest --ignore=tests/data -m "not regression"
+
+      # The regression test downloads bge-small (~130 MB) and encodes the
+      # committed fixture on CPU; cache the model so only the first run pays.
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-bge-small-en-v1.5
+
+      - name: Regression test (pinned end-to-end score)
+        run: uv run pytest tests/regression -m regression

@@ -54,7 +54,7 @@ class CrossEncoder(torch.nn.Module):
         self.model.eval()
         out = []
         for s in range(0, len(queries), batch_size):
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.device == "cuda"):
                 logits = self.forward(queries[s : s + batch_size], docs[s : s + batch_size])
             out.append(logits.float().cpu().numpy())
         return np.concatenate(out) if out else np.zeros(0, dtype=np.float32)
