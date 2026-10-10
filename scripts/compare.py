@@ -5,7 +5,8 @@
 
 Reads the per-query scores every evaluation writes to artifacts/per_query/.
 Mode A is also reported on the unsaturated slice (queries with fewer than 10
-Exact), where it can still discriminate (ADR-005).
+Exact), where it can still discriminate (ADR-005). p is a two-sided paired
+permutation test, 10,000 sign flips; it bottoms out at 1/10001 ~ 0.0001.
 """
 
 from __future__ import annotations
@@ -17,7 +18,12 @@ import polars as pl
 from esci.data.splits import add_folds
 from esci.eval.runner import PER_QUERY
 from esci.eval.slices import unsaturated_queries
-from esci.eval.stats import bootstrap_ci, paired_bootstrap_diff
+from esci.eval.stats import (
+    bootstrap_ci,
+    paired_bootstrap_diff,
+    paired_differences,
+    paired_permutation_test,
+)
 
 # (label, mode, metric, restrict to unsaturated queries)
 REPORTS = [
@@ -58,10 +64,10 @@ def main() -> None:
             line = f"  {system:<22} {ci}"
             if system != args.baseline:
                 diff = paired_bootstrap_diff(base, df, metric, args.resamples)
-                sig = "significant" if diff.low > 0 or diff.high < 0 else "not significant"
+                p = paired_permutation_test(paired_differences(base, df, metric))
                 line += (
                     f"   vs {args.baseline}: {diff.estimate:+.4f} "
-                    f"[{diff.low:+.4f}, {diff.high:+.4f}] {sig}"
+                    f"[{diff.low:+.4f}, {diff.high:+.4f}] p={p:.4f}"
                 )
             print(line)
 

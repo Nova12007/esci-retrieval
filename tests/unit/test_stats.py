@@ -4,7 +4,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from esci.eval.stats import bootstrap_ci, paired_bootstrap_diff
+from esci.eval.stats import bootstrap_ci, paired_bootstrap_diff, paired_permutation_test
 
 
 def test_constant_scores_give_zero_width_interval() -> None:
@@ -50,3 +50,19 @@ def test_queries_skipped_by_either_system_are_dropped_from_both() -> None:
     a = _frame([0.0, 0.0, None])
     b = _frame([1.0, 1.0, 1.0])
     assert paired_bootstrap_diff(a, b, "m").estimate == pytest.approx(1.0)
+
+
+def test_permutation_identical_systems_is_not_significant() -> None:
+    assert paired_permutation_test(np.zeros(500), n_permutations=999) == 1.0
+
+
+def test_permutation_consistent_shift_is_highly_significant() -> None:
+    d = 0.02 + 0.01 * np.random.default_rng(4).standard_normal(1000)
+    p = paired_permutation_test(d, n_permutations=999)
+    assert p == pytest.approx(1 / 1000)  # nothing beats observed; the floor is 1/(n+1)
+
+
+def test_permutation_pure_noise_is_not_significant() -> None:
+    d = np.random.default_rng(5).choice([-0.1, 0.1], size=2000)
+    d -= d.mean()  # exactly zero mean
+    assert paired_permutation_test(d, n_permutations=999) > 0.5
