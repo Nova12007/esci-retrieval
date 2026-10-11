@@ -741,3 +741,57 @@ slice; query slices (ADR-013); failure analysis written by hand
 (`docs/failure_analysis.md`); a pinned-value regression test running in CI;
 interleaving demonstrated. `results.jsonl` rows are point estimates by
 design (append-only log); every reported comparison carries an interval.
+
+---
+
+## ADR-015 -- Distillation with margin-MSE at weight 1 hurts retrieval
+
+**Date:** 2026-10-11
+**Status:** accepted; v8 (weight 0.1) pending
+
+### Context
+
+The cross-encoder cannot be served (ADR-011), so its ranking was distilled
+into a bi-encoder student. Teacher: `ce_v1` logits for all 1,256,164 judged
+train pairs (`scripts/score_teacher.py`). Student `biencoder_v7`: v3's
+configuration plus margin-MSE (Hofstätter et al. 2020) on each query's
+(positive, negative) pairs: loss = InfoNCE + 1.0 x margin-MSE, student
+scores as cosine / 0.05. One variable against v3.
+
+Teacher coverage was complete (`teacher_valid_rate` = `neg_valid_rate` =
+0.59 throughout) and margin-MSE fell from 5.3 to 3.0.
+
+### Results
+
+Paired bootstrap, v7 minus v3, test fold:
+
+| metric | v3 | v7 | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.5952 | -0.0391 [-0.0409, -0.0372] |
+| Mode B nDCG@10 of the list | 0.3757 | 0.3569 | -0.0188 [-0.0203, -0.0173] |
+| Mode A nDCG@10, all | 0.8919 | 0.8928 | +0.0008 [+0.0001, +0.0016] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.8030 | +0.0016 [-0.0003, +0.0034], p=0.089 |
+
+The cross-encoder adds +0.0147 on the unsaturated slice; v7 recovers about
+a tenth of it, not significantly, and loses 3.9 points of recall.
+
+### Diagnosis
+
+On 2,000 training triples (query, Exact, non-Exact), mean margin in logit
+units: teacher 2.24, v3 2.62, v7 2.20; correlation with the teacher 0.688
+for v3, 0.775 for v7. The student learned exactly what it was asked: its
+margins match the teacher's. The scales were compatible, so a scale
+mismatch is not the cause.
+
+The weighting is. At the end of training margin-MSE was ~3.0 against
+InfoNCE ~1.05, while v3 finished InfoNCE at 0.87. The margin term dominated
+the gradient, and it only knows judged pairs: Exact against its near-misses.
+Full-corpus recall depends on separating Exact products from the other 1.2M,
+which only InfoNCE's in-batch negatives teach, and that got worse.
+
+### Decision
+
+Weight 1.0 was an unexamined default, chosen without comparing the two
+losses' magnitudes. Re-run at 0.1 (v8), one variable. Recorded prediction:
+Recall@100 within ~0.005 of v3, a small Mode A gain. If v8 does not beat v3,
+distillation is closed and v3 is the served model.
