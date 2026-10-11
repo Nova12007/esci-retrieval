@@ -71,6 +71,13 @@ class MicroBatcher:
     async def _run(self) -> None:
         while True:
             batch = [await self._queue.get()]
+            # Opportunistic first: take whatever is already queued, no timer.
+            # Under load, requests pile up while the encoder is busy, so this
+            # alone forms batches; at low load it adds no latency at all. Only
+            # then, if max_wait_ms > 0, wait for more. (On Windows a short
+            # asyncio wait sleeps a ~15.6 ms timer tick, so windows are coarse.)
+            while len(batch) < self._max_batch and not self._queue.empty():
+                batch.append(self._queue.get_nowait())
             deadline = time.perf_counter() + self._max_wait
             while len(batch) < self._max_batch:
                 remaining = deadline - time.perf_counter()

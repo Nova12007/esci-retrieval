@@ -61,7 +61,7 @@ async def sweep(args: argparse.Namespace) -> list[str]:
     )
     rows = []
     for clients in args.clients:
-        for max_batch, wait in [(1, 0.0), (8, 2.0), (8, 5.0), (16, 5.0), (32, 5.0), (32, 10.0)]:
+        for max_batch, wait in [(1, 0.0), (8, 0.0), (16, 0.0), (8, 2.0), (16, 5.0)]:
             batcher = MicroBatcher(encoder.encode, max_batch=max_batch, max_wait_ms=wait)
             await batcher.start()
             await load(batcher, queries, clients, 2.0)  # warm up

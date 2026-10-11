@@ -795,3 +795,66 @@ Weight 1.0 was an unexamined default, chosen without comparing the two
 losses' magnitudes. Re-run at 0.1 (v8), one variable. Recorded prediction:
 Recall@100 within ~0.005 of v3, a small Mode A gain. If v8 does not beat v3,
 distillation is closed and v3 is the served model.
+
+---
+
+## ADR-016 -- Served query encoder: ONNX fp32, opportunistic batching of 8
+
+**Date:** 2026-10-11
+**Status:** accepted
+
+### Context
+
+Each request encodes one query on a 2-vCPU CPU instance; product vectors are
+computed offline. Model: `biencoder_v3`. All timings on an idle laptop CPU.
+
+### Export and quantisation
+
+`scripts/export_onnx.py` exports the query path (encoder, CLS pooling, L2
+norm) and checks parity on 1,000 real test queries before anything is timed:
+fp32 max |diff| 2.6e-7, cosine 1.000000. Dynamic INT8: mean cosine 0.970,
+min 0.908.
+
+Quality with the same product vectors, exact search (`bench_query_encoder.py`):
+
+| query encoder | Recall@100 vs PyTorch, 3,000 queries | 1,000 queries |
+|---|---|---|
+| ONNX fp32 | +0.0000 (identical) | +0.0000 |
+| ONNX INT8 | -0.0054 | -0.0073 |
+
+One query per call:
+
+| encoder | 1 thread p50 / p99 | 2 threads p50 / p99 |
+|---|---|---|
+| PyTorch fp32 | 14.4 / 19.3 ms | 9.5 / 11.9 ms |
+| ONNX fp32 | 8.9 / 11.7 ms | 6.0 / 8.3 ms |
+| ONNX INT8 | 3.7 / 6.3 ms | 2.9 / 4.1 ms |
+
+**Decision: ONNX fp32.** INT8 saves ~4 ms of p99 inside a 100 ms budget and
+costs half a point of recall and nDCG. A saving no user can perceive does not
+pay for a measurable quality loss.
+
+### Micro-batching
+
+Closed-loop load against `serving/batcher.py`, ONNX fp32 at 2 threads
+(`scripts/sweep_batcher.py`, `benchmarks/batcher_sweep.md`):
+
+| setting | 1 client p50 / p99 | 8 clients q/s, p99 | 32 clients q/s |
+|---|---|---|---|
+| no batching | 6.2 / 7.9 ms | 163, 55 ms | 159 |
+| batch 8, 2 ms window | 15.8 / 31.0 ms | 250, 43 ms | 249 |
+| batch 8, opportunistic | 6.1 / 7.9 ms | 250, 43 ms | 248 |
+
+Batching raises capacity ~53%, to ~250 queries/s; batch 16 or 32 adds no
+throughput and worsens p99 (every query pads to the batch's longest). A
+timed window costs a single client 10 ms because an asyncio wait on Windows
+sleeps a ~15.6 ms timer tick. **Decision: max_batch 8, no window**: take the
+first request plus whatever is already queued. Batches form on their own
+under load, and an idle server adds no latency.
+
+### Consequences
+
+- Projected served path: ~8 ms encode + ~1.4 ms HNSW (ADR-009) plus HTTP.
+  The week 8 load test measures it end to end; this does not replace it.
+- 250 queries/s per instance is the encoder ceiling on 2 vCPU, well above the
+  50 queries/s target.

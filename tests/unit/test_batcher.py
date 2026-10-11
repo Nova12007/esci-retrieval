@@ -72,3 +72,17 @@ def test_encoder_failure_reaches_every_caller_in_the_batch() -> None:
 def test_rejects_nonsense_settings() -> None:
     with pytest.raises(AssertionError):
         MicroBatcher(_echo, max_batch=0)
+
+
+def test_zero_window_still_batches_requests_already_queued() -> None:
+    """No timer, but whatever queued up while the encoder was busy rides along."""
+
+    async def go() -> list[int]:
+        b = MicroBatcher(_echo, max_batch=8, max_wait_ms=0)
+        await b.start()
+        await asyncio.gather(*(b.encode(str(i)) for i in range(16)))
+        await b.stop()
+        return b.stats.sizes
+
+    sizes = _run(go())
+    assert sum(sizes) == 16 and max(sizes) > 1
