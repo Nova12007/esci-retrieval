@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESCI product search</title>
+<style>
+  :root { --bg:#fbfbf9; --fg:#18181b; --muted:#5f5f66; --rule:#e4e4df; --accent:#2a78d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16161a; --fg:#ececef; --muted:#a3a3ad; --rule:#2c2c33; --accent:#5b9bea; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:40px 16px 64px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 24px; font-size:.95rem; }
+  form { display:flex; gap:8px; }
+  input { flex:1; min-width:0; font:inherit; padding:10px 12px; border:1px solid var(--rule);
+          border-radius:6px; background:transparent; color:var(--fg); }
+  button { font:inherit; padding:10px 18px; border:0; border-radius:6px;
+           background:var(--accent); color:#fff; cursor:pointer; }
+  #meta { color:var(--muted); font:13px ui-monospace, Consolas, monospace; margin:16px 0 8px;
+          min-height:1.2em; }
+  ol { list-style:none; padding:0; margin:0; }
+  li { padding:12px 0; border-bottom:1px solid var(--rule); }
+  .t { font-weight:500; }
+  .b { color:var(--muted); font-size:.9rem; }
+  .s { float:right; color:var(--muted); font:13px ui-monospace, Consolas, monospace; margin-left:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ESCI product search</h1>
+  <p class="sub">Fine-tuned bge-small bi-encoder, ONNX on CPU, HNSW over 1.2M Amazon products.</p>
+  <form id="f"><input id="q" placeholder="e.g. usb c cable 6ft" autofocus><button>Search</button></form>
+  <div id="meta"></div>
+  <ol id="out"></ol>
+</main>
+<script>
+const f = document.getElementById("f"), q = document.getElementById("q");
+const meta = document.getElementById("meta"), out = document.getElementById("out");
+f.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const query = q.value.trim();
+  if (!query) return;
+  meta.textContent = "searching…";
+  try {
+    const r = await fetch(`/search?k=20&q=${encodeURIComponent(query)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const t = d.timings_ms;
+    const parts = ["encode", "search", "hydrate"].filter((s) => s in t).map((s) => `${s} ${t[s].toFixed(1)}`);
+    meta.textContent = `${d.results.length} results · server ${d.latency_ms.toFixed(1)} ms` +
+      (d.cached ? " · cached" : ` · ${parts.join(" · ")} ms`);
+    out.replaceChildren(...d.results.map((h) => {
+      const li = document.createElement("li");
+      const s = document.createElement("span"); s.className = "s"; s.textContent = h.score.toFixed(3);
+      const ti = document.createElement("div"); ti.className = "t"; ti.textContent = h.title || h.product_id;
+      const b = document.createElement("div"); b.className = "b"; b.textContent = h.brand;
+      li.append(s, ti, b);
+      return li;
+    }));
+  } catch (err) {
+    meta.textContent = `error: ${err.message}`;
+  }
+});
+</script>
+</body>
+</html>

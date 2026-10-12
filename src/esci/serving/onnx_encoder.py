@@ -18,9 +18,16 @@ from esci.models.biencoder import EncoderConfig
 
 
 class OnnxQueryEncoder:
-    def __init__(self, model_path: Path, cfg: EncoderConfig, threads: int = 1) -> None:
+    def __init__(
+        self,
+        model_path: Path,
+        cfg: EncoderConfig,
+        threads: int = 1,
+        tokenizer_dir: Path | None = None,
+    ) -> None:
         self.cfg = cfg
-        self.tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+        # A bundled tokenizer means the server never reaches the Hub at startup.
+        self.tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_dir or cfg.model_name))
         options = ort.SessionOptions()
         # One request, one thread: on a 2-vCPU instance, concurrent requests
         # share cores, and intra-op threads would just contend with each other.

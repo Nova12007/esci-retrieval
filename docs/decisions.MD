@@ -896,3 +896,20 @@ opportunistic batching of 8 (~250 queries/s per instance), HNSW M=16
 efSearch=256 (1.37 ms p99, ADR-009). The cross-encoder stays the reported
 ceiling (ADR-011); distillation did not reach it (ADR-015). INT8 rejected
 (ADR-016).
+
+### Update 2026-10-12 -- laptop latency is not stable; serve-time numbers come from the target
+
+Re-running `bench_query_encoder.py --latency` unchanged one day later gave
+ONNX fp32 at 2 threads p50 39.2 ms against 6.0 ms the day before: every
+variant, PyTorch included, about 6x slower, on mains power, at 10% CPU load,
+with no change from raising process priority. The laptop's speed changes
+with its power mode and thermal state.
+
+ADR-016's comparisons stand, since each was measured within one session:
+ONNX fp32 is ~1.5x faster than PyTorch and identical in quality, INT8 ~2x
+faster again for half a point of recall, opportunistic batching lifts
+throughput ~50% with no low-load penalty. Its absolute milliseconds do not
+transfer between days. Latency claims for the served system come from the
+deployment target under load (week 8), not from this machine. Even in the
+slow state the path fits the budget: encode p99 ~58 ms + HNSW ~3 ms +
+hydrate ~1.4 ms.

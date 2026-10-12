@@ -40,3 +40,18 @@ def test_scores_are_monotonically_non_increasing(client: TestClient) -> None:
     results = client.get("/search", params={"q": "laptop", "k": 20}).json()["results"]
     scores = [hit["score"] for hit in results]
     assert scores == sorted(scores, reverse=True)
+
+
+def test_info_reports_engine_details(client: TestClient) -> None:
+    body = client.get("/info").json()
+    assert body["model"] == "fake" and "version" in body
+
+
+def test_demo_page_is_served_at_root(client: TestClient) -> None:
+    response = client.get("/")
+    assert response.status_code == 200 and "<form" in response.text
+
+
+def test_response_carries_timings_and_cache_flag(client: TestClient) -> None:
+    body = client.get("/search", params={"q": "lamp", "k": 3}).json()
+    assert body["cached"] is False and "total" in body["timings_ms"] and body["latency_ms"] >= 0
