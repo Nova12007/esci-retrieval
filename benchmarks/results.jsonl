@@ -29,3 +29,5 @@
 {"system": "ce_v1_on_rrf", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6497, "ndcg@10": 0.4043}
 {"system": "biencoder_v7", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8928, "mrr": 0.9254}
 {"system": "biencoder_v7", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5952, "ndcg@10": 0.3569}
+{"system": "biencoder_v8", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8937, "mrr": 0.9262}
+{"system": "biencoder_v8", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6268, "ndcg@10": 0.3728}

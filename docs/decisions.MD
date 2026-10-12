@@ -858,3 +858,41 @@ under load, and an idle server adds no latency.
   The week 8 load test measures it end to end; this does not replace it.
 - 250 queries/s per instance is the encoder ceiling on 2 vCPU, well above the
   50 queries/s target.
+
+### Update 2026-10-12 -- v8, margin weight 0.1: closed, v3 is served
+
+v8 = v7 with margin-MSE weight 0.1. InfoNCE finished at 0.868 (v3: 0.867),
+so the margin term no longer swamps it. Paired bootstrap against v3:
+
+| metric | v3 | v8 | difference |
+|---|---|---|---|
+| Mode B Recall@100 | 0.6343 | 0.6268 | -0.0075 [-0.0086, -0.0064] |
+| Mode B nDCG@10 of the list | 0.3757 | 0.3728 | -0.0029 [-0.0039, -0.0018] |
+| Mode A nDCG@10, all | 0.8919 | 0.8937 | +0.0018 [+0.0013, +0.0023] |
+| Mode A nDCG@10, unsaturated | 0.8014 | 0.8043 | +0.0029 [+0.0015, +0.0042] |
+
+The recorded prediction (recall within 0.005 of v3) missed: -0.0075.
+
+Recovery of the cross-encoder's gain on the unsaturated slice: v7 11% (not
+significant), v8 20%. On the headline Mode B metrics, neither recovers any;
+both lose.
+
+**Decision:** distillation is closed as a negative result and `biencoder_v3`
+is the served model. The teacher scored only judged pairs, so it can teach
+"Exact against its near-misses" but never "Exact against the other 1.2M
+products", which is what Recall@100 rewards; every margin weight tried
+traded the second for the first. The fixes are known and out of budget:
+teacher-scoring each batch's in-batch pairs is ~4,096 cross-encoder calls
+per step (~2.6 s/step, an 80-minute run becomes ~90 hours), or a denoised
+mining pipeline where the teacher relabels mined candidates.
+
+---
+
+## Week 7 gate -- 2026-10-12
+
+Served path decided and measured component by component: `biencoder_v3`,
+query encoding in ONNX fp32 (6.0 / 8.3 ms p50 / p99 on 2 threads, ADR-016),
+opportunistic batching of 8 (~250 queries/s per instance), HNSW M=16
+efSearch=256 (1.37 ms p99, ADR-009). The cross-encoder stays the reported
+ceiling (ADR-011); distillation did not reach it (ADR-015). INT8 rejected
+(ADR-016).
