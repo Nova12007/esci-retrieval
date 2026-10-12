@@ -37,6 +37,14 @@ bge-small bi-encoder (ONNX, CPU) and an HNSW index. Search at `/`, API at
 Code, evaluation and design decisions: {github}
 """
 
+LF = "\n"
+
+
+def write_lf(path: Path, text: str) -> None:
+    """Write with LF endings on any OS. write_text would emit CRLF on Windows,
+    and a backslash continuation followed by CRLF breaks a RUN step on Linux."""
+    path.write_bytes(text.replace("\r\n", LF).encode("utf-8"))
+
 
 def main() -> None:
     p = argparse.ArgumentParser()
@@ -70,16 +78,8 @@ def main() -> None:
         dockerfile = Path("deploy/space/Dockerfile").read_text(encoding="utf-8")
         # Spaces pass no build args, so the artifact repo is written into the file.
         dockerfile = dockerfile.replace("ARG ARTIFACT_REPO", f"ARG ARTIFACT_REPO={artifacts}")
-        # LF endings explicitly: write_text would emit CRLF on Windows, and a
-        # backslash continuation followed by CRLF breaks a RUN step on Linux.
-        dockerfile = dockerfile.replace("
-", "
-")
-        (stage / "Dockerfile").write_text(dockerfile, encoding="utf-8", newline="
-")
-        card = SPACE_CARD.format(github=args.github)
-        (stage / "README.md").write_text(card, encoding="utf-8", newline="
-")
+        write_lf(stage / "Dockerfile", dockerfile)
+        write_lf(stage / "README.md", SPACE_CARD.format(github=args.github))
         # Not README.MD: on Windows it is the same file as the Space card README.md.
         for name in ["pyproject.toml", "uv.lock"]:
             (stage / name).write_bytes(Path(name).read_bytes())
