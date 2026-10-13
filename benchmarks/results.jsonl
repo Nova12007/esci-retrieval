@@ -31,3 +31,7 @@
 {"system": "biencoder_v7", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5952, "ndcg@10": 0.3569}
 {"system": "biencoder_v8", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8937, "mrr": 0.9262}
 {"system": "biencoder_v8", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.6268, "ndcg@10": 0.3728}
+{"system": "bge_small_zeroshot", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.8694, "mrr": 0.9058}
+{"system": "bge_small_zeroshot", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5698, "ndcg@10": 0.3255}
+{"system": "bm25_tbb", "mode": "rerank", "n_scored": 22458, "n_skipped": 0, "ndcg@10": 0.7513, "mrr": 0.7744}
+{"system": "bm25_tbb", "mode": "retrieval", "n_scored": 22457, "n_skipped": 1, "recall@100": 0.5601, "ndcg@10": 0.3202}

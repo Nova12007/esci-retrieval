@@ -133,7 +133,7 @@ This record says which is which.
 
 | setting | value | basis |
 |---|---|---|
-| training unit | one example per query | **measured**: 94.7% of queries have several Exact products; one row per (query, Exact) pair put a query in a batch several times, training its own correct answers as negatives |
+| training unit | one example per query | **measured**: 94.7% of queries have several Exact products (corrected 2026-10-13: re-measured on the processed data, 95.7% of train and 95.3% of test queries); one row per (query, Exact) pair put a query in a batch several times, training its own correct answers as negatives |
 | document length | 256 tokens | **measured** (below) |
 | batch | 16 queries, 96 sequences | **memory-bound** at 256 tokens without checkpointing |
 | negatives | up to 4 S/C/I per query, never repeated | **measured**: median query has 3; 28.4% have none |

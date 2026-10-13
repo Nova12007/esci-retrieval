@@ -19,6 +19,12 @@ def main() -> None:
         "--limit", type=int, default=None, help="evaluate on N queries only, for fast iteration"
     )
     parser.add_argument("--corpus", choices=["t", "tbb"], default="tbb")
+    parser.add_argument(
+        "--mode",
+        choices=["both", "rerank", "retrieval"],
+        default="both",
+        help="re-run one mode without repeating the other's result row",
+    )
     args = parser.parse_args()
 
     corpus_path = f"data/processed/corpus_{args.corpus}.parquet"
@@ -45,11 +51,13 @@ def main() -> None:
     )
     print(f"index built in {time.perf_counter() - t0:.1f}s")
 
-    print("\n--- Mode A: rerank judged set ---")
-    print(evaluate_rerank(ranker, evalset, k=10))
+    if args.mode in ("both", "rerank"):
+        print("\n--- Mode A: rerank judged set ---")
+        print(evaluate_rerank(ranker, evalset, k=10))
 
-    print("\n--- Mode B: full-corpus retrieval ---")
-    print(evaluate_retrieval(ranker, evalset, k=100))
+    if args.mode in ("both", "retrieval"):
+        print("\n--- Mode B: full-corpus retrieval ---")
+        print(evaluate_retrieval(ranker, evalset, k=100))
 
 
 if __name__ == "__main__":
