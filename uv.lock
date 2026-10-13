@@ -166,22 +166,14 @@ name = "esci-retrieval"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "bm25s" },
     { name = "faiss-cpu" },
     { name = "fastapi" },
+    { name = "huggingface-hub" },
     { name = "numpy" },
     { name = "onnxruntime" },
-    { name = "polars" },
-    { name = "pyarrow" },
     { name = "pydantic" },
-    { name = "pystemmer" },
-    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
-    { name = "torch", version = "2.14.0+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
-    { name = "tqdm" },
-    { name = "transformers" },
+    { name = "tokenizers" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "wandb" },
 ]
 
 [package.dev-dependencies]
@@ -194,25 +186,29 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+train = [
+    { name = "bm25s" },
+    { name = "polars" },
+    { name = "pyarrow" },
+    { name = "pystemmer" },
+    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "torch", version = "2.14.0+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+    { name = "tqdm" },
+    { name = "transformers" },
+    { name = "wandb" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "bm25s", specifier = ">=0.3.11" },
     { name = "faiss-cpu", specifier = ">=1.15.1" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "huggingface-hub", specifier = ">=1.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "onnxruntime", specifier = ">=1.31.0" },
-    { name = "polars", specifier = ">=1.12" },
-    { name = "pyarrow", specifier = ">=17" },
     { name = "pydantic", specifier = ">=2.9" },
-    { name = "pystemmer", specifier = ">=3.1.0" },
-    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.14,<2.15" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torch", marker = "sys_platform == 'win32'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cu126" },
-    { name = "tqdm", specifier = ">=4.66" },
-    { name = "transformers", specifier = ">=5.17.0" },
+    { name = "tokenizers", specifier = ">=0.22" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
-    { name = "wandb", specifier = ">=0.30.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -224,6 +220,18 @@ dev = [
     { name = "onnxscript", specifier = ">=0.7.2" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "ruff", specifier = ">=0.7" },
+]
+train = [
+    { name = "bm25s", specifier = ">=0.3.11" },
+    { name = "polars", specifier = ">=1.12" },
+    { name = "pyarrow", specifier = ">=17" },
+    { name = "pystemmer", specifier = ">=3.1.0" },
+    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.14,<2.15" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform == 'win32'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cu126" },
+    { name = "tqdm", specifier = ">=4.66" },
+    { name = "transformers", specifier = ">=5.17.0" },
+    { name = "wandb", specifier = ">=0.30.0" },
 ]
 
 [[package]]

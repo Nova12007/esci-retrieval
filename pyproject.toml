@@ -3,24 +3,31 @@ name = "esci-retrieval"
 version = "0.1.0"
 description = "Two-stage neural retrieval over the Amazon ESCI dataset"
 requires-python = ">=3.12,<3.13"
+# Core = what the search service needs, and all the Docker image installs.
+# Training and evaluation live in the "train" group; `uv sync` installs every
+# group locally (tool.uv.default-groups), the image uses --no-default-groups.
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
+    "numpy>=1.26",
+    "faiss-cpu>=1.15.1",
+    "onnxruntime>=1.31.0",
+    "tokenizers>=0.22",
+    "huggingface-hub>=1.0",  # the `hf` CLI that fetches serving artifacts at build
+]
+
+[dependency-groups]
+train = [
     "polars>=1.12",
     "pyarrow>=17",
-    "numpy>=1.26",
     "bm25s>=0.3.11",
     "pystemmer>=3.1.0",
     "tqdm>=4.66",
     "torch>=2.14,<2.15",   # same minor on laptop (CUDA) and Linux (CPU)
     "transformers>=5.17.0",
-    "faiss-cpu>=1.15.1",
     "wandb>=0.30.0",
-    "onnxruntime>=1.31.0",
 ]
-
-[dependency-groups]
 dev = [
     "pytest>=8.3",
     "httpx>=0.27",      # required by fastapi's TestClient
@@ -30,6 +37,9 @@ dev = [
     "onnx>=1.23.2",
     "onnxscript>=0.7.2",
 ]
+
+[tool.uv]
+default-groups = ["dev", "train"]
 
 [tool.ruff]
 line-length = 100

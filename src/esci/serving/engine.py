@@ -17,7 +17,7 @@ from typing import Any, Protocol
 import faiss
 import numpy as np
 
-from esci.models.biencoder import EncoderConfig
+from esci.models.config import EncoderConfig
 from esci.serving.batcher import MicroBatcher
 from esci.serving.catalog import Catalog
 from esci.serving.onnx_encoder import OnnxQueryEncoder

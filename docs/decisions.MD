@@ -913,3 +913,49 @@ transfer between days. Latency claims for the served system come from the
 deployment target under load (week 8), not from this machine. Even in the
 slow state the path fits the budget: encode p99 ~58 ms + HNSW ~3 ms +
 hydrate ~1.4 ms.
+
+---
+
+## ADR-017 -- No hosted URL: a one-command container and a committed load test
+
+**Date:** 2026-10-13
+**Status:** accepted
+
+### Context
+
+The plan ships a live URL in week 8. A service holding a 2 GB HNSW index
+needs ~2.5 GB of RAM. Checked on 13 Oct 2026: free hosts without a card
+(Render, SnapDeploy, Railway, Back4App) cap containers at 256-512 MB;
+Hugging Face now requires a paid plan for Docker Spaces (a deploy attempt
+returned HTTP 402); Oracle's Always Free VM needs an account that could not
+be accessed; Cloud Run's monthly free allowance would cover this traffic
+but needs a billing account with a card.
+
+### Decision
+
+No hosted service. The owner judged the remaining options not worth the
+setup. Shipping means:
+
+- `docker compose -f docker/compose.yaml up --build` (`make docker`) builds a
+  self-contained image from the published serving artifacts
+  (`huggingface.co/N0va12007/esci-retrieval-artifacts`: HNSW index, ONNX
+  encoder, tokenizer, catalog, manifest), so it runs without the dataset or
+  a GPU, sized at the 2 CPUs / 4 GB that was load-tested.
+- The committed open-loop load test (`benchmarks/latency_report.md`):
+  p99 78.2 ms at 50 requests/s with every request a cache miss, 0 failures.
+
+### Alternatives rejected
+
+- **A 512 MB "lite" build on a free host.** Needs the compressed index
+  (about -5 points of judged recall, ADR-009) and INT8 (-0.5, ADR-016) on
+  0.1-0.25 vCPU: the hosted system would not be the one evaluated.
+- **Cloud Run scaled to zero.** Free in practice for this traffic; declined
+  over the billing-account setup.
+
+### Consequences
+
+- Claims are "containerised, load-tested at 2 vCPU", never "deployed".
+- Week 9 monitoring (Prometheus, drift) runs against the local container
+  under replayed traffic rather than live traffic.
+- Hosting stays a configuration step: the same image runs on Cloud Run or
+  any container host unchanged.

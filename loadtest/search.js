@@ -14,7 +14,7 @@ import { check } from "k6";
 import { SharedArray } from "k6/data";
 import exec from "k6/execution";
 
-const BASE = __ENV.BASE_URL || "http://host.docker.internal:7860";
+const BASE = __ENV.BASE_URL || "http://host.docker.internal:8000";
 const PEAK = Number(__ENV.PEAK_RPS || 50);
 const queries = new SharedArray("queries", () => JSON.parse(open("./queries.json")));
 

@@ -7,7 +7,22 @@ is `GET /search?k=10` for one test-fold query. "Peak" is the 3-minute hold.
 Open loop matters: requests arrive on schedule whether or not earlier ones
 have finished, so queueing shows up in the tail instead of slowing the test.
 
-## Local container, 12 Oct 2026
+## Reference: self-contained image, 13 Oct 2026
+
+`make docker`: the image built from `docker/Dockerfile` with the serving
+artifacts downloaded from huggingface.co/N0va12007/esci-retrieval-artifacts
+at build time, core dependencies only (no torch), run at 2 CPUs / 4 GB.
+22,458 unique test queries, no repeats, so every request misses the cache.
+
+| requests | failed | p50 | p95 | **p99 at 50 rps** | cache hit rate | memory |
+|---|---|---|---|---|---|---|
+| 10,649 | 0% | 11.9 ms | 19.7 ms | **57.0 ms** | 0% | 2.32 GB |
+
+**Budget (p99 < 100 ms at 50 requests/s): met with no cache help.** Faster
+than the 12 Oct run below because the artifacts are inside the image rather
+than read through a Windows bind mount.
+
+## Earlier: bind-mounted artifacts, 12 Oct 2026
 
 Image `deploy/space/Dockerfile`, run with `--cpus=2 --memory=4g` (a 2-vCPU
 instance), serving folder for `biencoder_v3` mounted read-only. k6 ran in a
@@ -35,8 +50,9 @@ batching (ADR-016) is idle at this load and costs nothing.
   file reads; the first SQLite hydrate took 16 ms against ~1 ms warm. The
   per-stage timings (encode ~8 ms, HNSW ~1.6 ms) sum well below the p99, and
   slow first reads plus host contention are the likely tail.
-- The deployed Space is the reference; its run is recorded below.
+- This is the reference measurement; there is no hosted run (ADR-017).
 
-## Deployed Space
+## Hosted service
 
-Pending.
+None: the service is not hosted (ADR-017). Reproduce the measurement with
+`make docker` in one terminal and `make loadtest` in another.

@@ -1,17 +1,19 @@
+# One command to run the search service, sized like the load-tested setup:
+#
+#   docker compose -f docker/compose.yaml up --build
+#
+# Builds self-contained from the published serving artifacts (no dataset or
+# GPU needed), then serves the demo page and API on http://localhost:8000.
 services:
   api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        ARTIFACT_REPO: N0va12007/esci-retrieval-artifacts
+    image: esci-search
     ports:
       - "8000:8000"
-    environment:
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      - redis
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # 2 CPUs and 4 GB: the configuration benchmarks/latency_report.md measured.
+    cpus: 2
+    mem_limit: 4g
